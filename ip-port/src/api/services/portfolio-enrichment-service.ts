@@ -119,8 +119,11 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Calculate base score using multi-factor formula:
- * base_score = (citation_score + time_score + velocity_score) × sector_multiplier × expired_multiplier
+ * Calculate base score using multi-factor formula (v4 — time-weighted):
+ * base_score = (citation_score + time_score + velocity_score + youth_bonus) × sector_multiplier × expired_multiplier
+ *
+ * v4 shifts weight from citations (~50% of raw) to remaining life (~41%),
+ * so patents with long remaining terms aren't buried by citation-dominant scoring.
  *
  * Expired patents get a 0.1x multiplier so they always rank below active patents,
  * while maintaining fair relative ranking among themselves.
@@ -135,16 +138,22 @@ function calculateBaseScore(patent: {
   const remainingYears = patent.remaining_years || 0;
   const yearsSinceGrant = getYearsSinceGrant(patent.patent_date);
 
-  // Citation Score: log10(forward_citations + 1) × 40
-  const citationScore = Math.log10(forwardCitations + 1) * 40;
+  // Citation Score: log10(forward_citations + 1) × 20 (was ×40)
+  const citationScore = Math.log10(forwardCitations + 1) * 20;
 
-  // Time Score: clamp(remaining_years / 20, -0.5, 1.0) × 25
-  const timeFactor = clamp(remainingYears / 20, -0.5, 1.0);
-  const timeScore = timeFactor * 25;
+  // Time Score: clamp(remaining_years / 20, 0, 1.0) × 45 (was ×25, floor raised from -0.5 to 0)
+  const timeFactor = clamp(remainingYears / 20, 0, 1.0);
+  const timeScore = timeFactor * 45;
 
-  // Velocity Score: log10(citations_per_year + 1) × 20
+  // Velocity Score: log10(citations_per_year + 1) × 15 (was ×20)
   const citationsPerYear = forwardCitations / yearsSinceGrant;
-  const velocityScore = Math.log10(citationsPerYear + 1) * 20;
+  const velocityScore = Math.log10(citationsPerYear + 1) * 15;
+
+  // Youth Bonus: up to 10 pts for patents < 5 yrs old with 15+ yrs remaining
+  let youthBonus = 0;
+  if (yearsSinceGrant < 5 && remainingYears >= 15) {
+    youthBonus = 10 * (1 - yearsSinceGrant / 5);
+  }
 
   // Sector Multiplier: 0.8x to 1.5x
   const sectorMultiplier = getSectorMultiplier(patent.primary_sector);
@@ -153,7 +162,7 @@ function calculateBaseScore(patent: {
   // Ensures expired patents always rank below active patents
   const expiredMultiplier = remainingYears <= 0 ? 0.1 : 1.0;
 
-  const rawScore = citationScore + timeScore + velocityScore;
+  const rawScore = citationScore + timeScore + velocityScore + youthBonus;
   return Math.round(rawScore * sectorMultiplier * expiredMultiplier * 100) / 100;
 }
 

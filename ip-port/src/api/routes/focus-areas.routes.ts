@@ -16,7 +16,8 @@ import {
   deleteResults,
   getFieldsForObjectType,
 } from '../services/prompt-template-service.js';
-import { hasPatentData, fetchAndCachePatents } from '../services/patent-fetch-service.js';
+import { enrichPatentsFromXml } from '../services/patent-xml-parser-service.js';
+import { generateLitigationPackageCsv } from '../services/litigation-export-service.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -562,11 +563,15 @@ router.post('/:id/patents', async (req: Request, res: Response) => {
 
 /**
  * POST /api/focus-areas/:id/fetch-patents
- * Re-fetch patent data from PatentsView API for uncached patents in the focus area
+ * Enrich patent data from USPTO XML for patents in the focus area
  */
 router.post('/:id/fetch-patents', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const exportDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '';
+    if (!exportDir) {
+      return res.status(500).json({ error: 'USPTO_PATENT_GRANT_XML_DIR not configured' });
+    }
 
     // Get all patent IDs in this focus area
     const faPatents = await prisma.focusAreaPatent.findMany({
@@ -575,30 +580,22 @@ router.post('/:id/fetch-patents', async (req: Request, res: Response) => {
     });
     const allIds = faPatents.map(fp => fp.patentId);
 
-    // Find which ones are uncached
-    const uncachedIds = allIds.filter((pid: string) => !hasPatentData(pid));
-
-    if (uncachedIds.length === 0) {
-      return res.json({ message: 'All patents already have cached data', fetched: 0, failed: 0 });
+    if (allIds.length === 0) {
+      return res.json({ total: 0, enriched: 0, failed: 0, skipped: 0 });
     }
 
-    if (uncachedIds.length > 200) {
-      return res.status(400).json({ error: `Too many uncached patents (${uncachedIds.length}). Max 200 at a time.` });
-    }
-
-    console.log(`[FocusArea] Re-fetching ${uncachedIds.length} uncached patents for focus area ${id}...`);
-    const fetchResult = await fetchAndCachePatents(uncachedIds);
+    console.log(`[FocusArea] Enriching ${allIds.length} patents from USPTO XML for focus area ${id}...`);
+    const result = await enrichPatentsFromXml(allIds, exportDir, (msg) => console.log(`[FocusArea] ${msg}`));
 
     res.json({
       total: allIds.length,
-      uncached: uncachedIds.length,
-      fetched: fetchResult.fetched.length,
-      failed: fetchResult.failed.length,
-      failedIds: fetchResult.failed,
+      enriched: result.enriched.length,
+      failed: result.failed.length,
+      skipped: result.skipped.length,
     });
   } catch (error) {
-    console.error('Error fetching patents for focus area:', error);
-    res.status(500).json({ error: 'Failed to fetch patents' });
+    console.error('Error enriching patents for focus area:', error);
+    res.status(500).json({ error: 'Failed to enrich patents from XML' });
   }
 });
 
@@ -633,6 +630,33 @@ router.delete('/:id/patents', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error removing patents from focus area:', error);
     res.status(500).json({ error: 'Failed to remove patents' });
+  }
+});
+
+// =============================================================================
+// LITIGATION PACKAGE EXPORT
+// =============================================================================
+
+/**
+ * GET /api/focus-areas/:id/export-litigation-package
+ * Export comprehensive litigation package CSV with all scores and LLM reasoning
+ */
+router.get('/:id/export-litigation-package', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const result = await generateLitigationPackageCsv(id);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.send(result.csv);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to export litigation package';
+    console.error('Error exporting litigation package:', error);
+    if (message.includes('not found')) {
+      return res.status(404).json({ error: message });
+    }
+    res.status(500).json({ error: message });
   }
 });
 

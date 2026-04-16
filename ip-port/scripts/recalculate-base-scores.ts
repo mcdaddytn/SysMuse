@@ -1,20 +1,22 @@
 /**
- * Recalculate Base Scores
+ * Recalculate Base Scores (v4 — time-weighted)
  *
  * Updates the base score for patents in the portfolio using a multi-factor formula.
  *
  * Formula:
- *   base_score = (citation_score + time_score + velocity_score) × sector_multiplier × expired_multiplier
+ *   base_score = (citation_score + time_score + velocity_score + youth_bonus) × sector_multiplier × expired_multiplier
  *
  * Components:
- *   - Citation Score: log10(forward_citations + 1) × 40
- *   - Time Score: clamp(remaining_years / 20, -0.5, 1.0) × 25
- *   - Velocity Score: log10(citations_per_year + 1) × 20
+ *   - Citation Score: log10(forward_citations + 1) × 20
+ *   - Time Score: clamp(remaining_years / 20, 0, 1.0) × 45
+ *   - Velocity Score: log10(citations_per_year + 1) × 15
+ *   - Youth Bonus: up to 10 pts for patents < 5 yrs old with 15+ yrs remaining
  *   - Sector Multiplier: 0.8 + (damages_rating - 1) × 0.233
  *   - Expired Multiplier: 0.1 for expired patents, 1.0 for active
  *
  * Usage:
  *   npx tsx scripts/recalculate-base-scores.ts --all
+ *   npx tsx scripts/recalculate-base-scores.ts --all --db          # Also write to DB
  *   npx tsx scripts/recalculate-base-scores.ts --affiliate "Brocade Communications"
  *   npx tsx scripts/recalculate-base-scores.ts --zero-scores-only
  *   npx tsx scripts/recalculate-base-scores.ts --dry-run
@@ -22,6 +24,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { PrismaClient } from '@prisma/client';
 
 const OUTPUT_DIR = path.join(process.cwd(), 'output');
 const CONFIG_DIR = path.join(process.cwd(), 'config');
@@ -106,33 +109,42 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Calculate base score using multi-factor formula
+ * Calculate base score using multi-factor formula (v4 — time-weighted)
+ *
+ * v4 shifts weight from citations (~50% of raw) to remaining life (~41%),
+ * so patents with long remaining terms aren't buried by citation-dominant scoring.
  */
 function calculateBaseScore(patent: Patent): number {
   const forwardCitations = patent.forward_citations || 0;
   const remainingYears = patent.remaining_years || 0;
   const yearsSinceGrant = getYearsSinceGrant(patent.patent_date);
 
-  // Component 1: Citation Score (log-scaled, 0-120 range for 0-1000 citations)
-  const citationScore = Math.log10(forwardCitations + 1) * 40;
+  // Component 1: Citation Score (log-scaled, ×20 — was ×40)
+  const citationScore = Math.log10(forwardCitations + 1) * 20;
 
-  // Component 2: Time Score (remaining years factor, -12.5 to +25)
-  const timeFactor = clamp(remainingYears / 20, -0.5, 1.0);
-  const timeScore = timeFactor * 25;
+  // Component 2: Time Score (remaining years factor, ×45 — was ×25, floor raised from -0.5 to 0)
+  const timeFactor = clamp(remainingYears / 20, 0, 1.0);
+  const timeScore = timeFactor * 45;
 
-  // Component 3: Velocity Score (citations per year, rewards newer high-cited patents)
+  // Component 3: Velocity Score (citations per year, ×15 — was ×20)
   const citationsPerYear = forwardCitations / yearsSinceGrant;
-  const velocityScore = Math.log10(citationsPerYear + 1) * 20;
+  const velocityScore = Math.log10(citationsPerYear + 1) * 15;
 
-  // Component 4: Sector Multiplier (0.8x to 1.5x based on damages potential)
+  // Component 4: Youth Bonus (up to 10 pts for patents < 5 yrs old with 15+ yrs remaining)
+  let youthBonus = 0;
+  if (yearsSinceGrant < 5 && remainingYears >= 15) {
+    youthBonus = 10 * (1 - yearsSinceGrant / 5);
+  }
+
+  // Component 5: Sector Multiplier (0.8x to 1.5x based on damages potential)
   const sectorMultiplier = getSectorMultiplier(patent.primary_sector);
 
-  // Component 5: Expired Multiplier (0.1x for expired, 1.0x for active)
+  // Component 6: Expired Multiplier (0.1x for expired, 1.0x for active)
   // Ensures expired patents always rank below active patents
   const expiredMultiplier = remainingYears <= 0 ? 0.1 : 1.0;
 
   // Combine components
-  const rawScore = citationScore + timeScore + velocityScore;
+  const rawScore = citationScore + timeScore + velocityScore + youthBonus;
   const finalScore = rawScore * sectorMultiplier * expiredMultiplier;
 
   // Round to 2 decimal places
@@ -167,23 +179,26 @@ async function main() {
   const zeroOnly = args.includes('--zero-scores-only');
   const all = args.includes('--all');
   const dryRun = args.includes('--dry-run');
+  const writeDb = args.includes('--db');
 
   if (!affiliateFilter && !zeroOnly && !all) {
     console.log(`
-Recalculate Base Scores - Multi-factor scoring formula
+Recalculate Base Scores (v4 — time-weighted)
 
 Formula:
-  base_score = (citation_score + time_score + velocity_score) × sector × expired
+  base_score = (citation + time + velocity + youth) × sector × expired
 
 Components:
-  - Citation Score: log10(forward_citations + 1) × 40
-  - Time Score: clamp(remaining_years / 20, -0.5, 1.0) × 25
-  - Velocity Score: log10(citations_per_year + 1) × 20
+  - Citation Score: log10(forward_citations + 1) × 20
+  - Time Score: clamp(remaining_years / 20, 0, 1.0) × 45
+  - Velocity Score: log10(citations_per_year + 1) × 15
+  - Youth Bonus: up to 10 pts for patents < 5 yrs old with 15+ yrs remaining
   - Sector Multiplier: 0.8x (Low) to 1.5x (Very High) based on damages potential
   - Expired Multiplier: 0.1x for expired patents, 1.0x for active
 
 Usage:
   npx tsx scripts/recalculate-base-scores.ts --all
+  npx tsx scripts/recalculate-base-scores.ts --all --db          # Also write to DB
   npx tsx scripts/recalculate-base-scores.ts --affiliate "Brocade Communications"
   npx tsx scripts/recalculate-base-scores.ts --zero-scores-only
   npx tsx scripts/recalculate-base-scores.ts --dry-run
@@ -296,16 +311,46 @@ Usage:
   }
 
   if (updated > 0) {
-    // Save updated portfolio
+    // Save updated portfolio JSON
     data.metadata = data.metadata || {};
     data.metadata.lastScoreRecalc = new Date().toISOString();
     data.metadata.scoreRecalcCount = updated;
-    data.metadata.scoreFormula = 'v3: (citation + time + velocity) × sector × expired(0.1)';
+    data.metadata.scoreFormula = 'v4: (citation×20 + time×45 + velocity×15 + youth) × sector × expired(0.1)';
 
     const outputPath = path.join(OUTPUT_DIR, filename);
     fs.writeFileSync(outputPath, JSON.stringify(data, null, 2));
     console.log(`\nSaved to: ${filename}`);
-    console.log('\nNext: Reload API cache with POST /api/scores/reload');
+
+    // Write to DB if --db flag is set
+    if (writeDb) {
+      console.log(`\nWriting ${changes.length} updated scores to Patent.baseScore in DB...`);
+      const prisma = new PrismaClient();
+      try {
+        const BATCH_SIZE = 500;
+        let dbUpdated = 0;
+        for (let i = 0; i < changes.length; i += BATCH_SIZE) {
+          const batch = changes.slice(i, i + BATCH_SIZE);
+          await prisma.$transaction(
+            batch.map(c =>
+              prisma.patent.updateMany({
+                where: { patentId: c.id },
+                data: { baseScore: c.newScore },
+              })
+            )
+          );
+          dbUpdated += batch.length;
+          if (changes.length > BATCH_SIZE) {
+            console.log(`  DB progress: ${dbUpdated}/${changes.length}`);
+          }
+        }
+        console.log(`  DB updated: ${dbUpdated} patents`);
+      } finally {
+        await prisma.$disconnect();
+      }
+    } else {
+      console.log('\nNext: Reload API cache with POST /api/scores/reload');
+      console.log('  Or re-run with --db to also update Patent.baseScore in DB');
+    }
   }
 }
 

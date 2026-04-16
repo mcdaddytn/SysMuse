@@ -107,9 +107,10 @@ const cpcFilter = args.find(a => a.startsWith('--cpc='))?.split('=')[1]?.split('
 const cpcLabel = args.find(a => a.startsWith('--label='))?.split('=')[1] || null;
 const skipLlm = args.includes('--skip-llm');
 const exportOnly = args.includes('--export-only');
+const scoreType = (args.find(a => a.startsWith('--score-type='))?.split('=')[1] || 'subsector') as 'v3' | 'subsector';
 
 if (!sectorName) {
-  console.error('Usage: npx tsx scripts/create-sector-vendor-package.ts <SECTOR_NAME> [--top=N] [--cpc=PREFIX1,PREFIX2] [--label=NAME] [--skip-llm] [--export-only]');
+  console.error('Usage: npx tsx scripts/create-sector-vendor-package.ts <SECTOR_NAME> [--top=N] [--cpc=PREFIX1,PREFIX2] [--label=NAME] [--score-type=v3|subsector] [--skip-llm] [--export-only]');
   process.exit(1);
 }
 
@@ -277,7 +278,7 @@ const packageSlug = cpcLabel ? `${sectorName}-${cpcLabel}` : sectorName!;
 
 async function main() {
   console.log(`\n=== Sector Vendor Package: ${packageSlug} ===`);
-  console.log(`Top N: ${topN}, Skip LLM: ${skipLlm}, Export Only: ${exportOnly}`);
+  console.log(`Top N: ${topN}, Score Type: ${scoreType}, Skip LLM: ${skipLlm}, Export Only: ${exportOnly}`);
   if (cpcFilter) console.log(`CPC Filter: ${cpcFilter.join(', ')}${cpcLabel ? ` (label: ${cpcLabel})` : ''}`);
   console.log();
 
@@ -326,30 +327,65 @@ async function main() {
     console.log(`CPC filter (${cpcFilter.join(',')}): ${originalCount} → ${broadcomIds.length} patents`);
   }
 
-  // Get scores and rank
-  const allScores = await prisma.patentSubSectorScore.findMany({
-    where: { patentId: { in: broadcomIds } },
-    orderBy: { compositeScore: 'desc' },
-  });
+  // Get scores and rank — supports two scoring modes
+  let topPatentIds: string[];
+  let topScorePairs: Array<[string, number]>; // [patentId, score]
 
-  // Deduplicate to best per patent
-  const bestByPatent = new Map<string, (typeof allScores)[0]>();
-  for (const s of allScores) {
-    if (!bestByPatent.has(s.patentId)) {
-      bestByPatent.set(s.patentId, s);
+  if (scoreType === 'v3') {
+    // V3 mode: rank by active V3 snapshot scores
+    const portfolio = await prisma.portfolio.findUnique({ where: { name: BROADCOM_PORTFOLIO_NAME } });
+    const v3Snapshot = await prisma.scoreSnapshot.findFirst({
+      where: { scoreType: 'V3', isActive: true, portfolioId: portfolio?.id },
+      select: { id: true, name: true },
+    });
+    if (!v3Snapshot) {
+      console.error('No active V3 snapshot found. Run create-litigation-discovery-snapshot.ts first.');
+      process.exit(1);
     }
+    console.log(`V3 Snapshot: ${v3Snapshot.name}`);
+
+    const v3Entries = await prisma.patentScoreEntry.findMany({
+      where: {
+        snapshotId: v3Snapshot.id,
+        patentId: { in: broadcomIds },
+      },
+      orderBy: { score: 'desc' },
+      select: { patentId: true, score: true },
+    });
+
+    console.log(`V3-scored patents in sector: ${v3Entries.length}`);
+    console.log(`Top V3 score: ${v3Entries[0]?.score.toFixed(2) || 'n/a'}`);
+
+    topPatentIds = v3Entries.slice(0, topN).map(e => e.patentId);
+    topScorePairs = v3Entries.slice(0, topN).map(e => [e.patentId, e.score]);
+  } else {
+    // Default subsector mode: rank by PatentSubSectorScore.compositeScore
+    const allScores = await prisma.patentSubSectorScore.findMany({
+      where: { patentId: { in: broadcomIds } },
+      orderBy: { compositeScore: 'desc' },
+    });
+
+    // Deduplicate to best per patent
+    const bestByPatent = new Map<string, (typeof allScores)[0]>();
+    for (const s of allScores) {
+      if (!bestByPatent.has(s.patentId)) {
+        bestByPatent.set(s.patentId, s);
+      }
+    }
+    const ranked = [...bestByPatent.entries()]
+      .sort((a, b) => b[1].compositeScore - a[1].compositeScore);
+
+    console.log(`Scored patents: ${ranked.length}`);
+    console.log(`Top score: ${ranked[0]?.[1].compositeScore.toFixed(1) || 'n/a'}`);
+
+    topPatentIds = ranked.slice(0, topN).map(([id]) => id);
+    topScorePairs = ranked.slice(0, topN).map(([id, s]) => [id, s.compositeScore]);
   }
-  const ranked = [...bestByPatent.entries()]
-    .sort((a, b) => b[1].compositeScore - a[1].compositeScore);
 
-  console.log(`Scored patents: ${ranked.length}`);
-  console.log(`Top score: ${ranked[0]?.[1].compositeScore.toFixed(1) || 'n/a'}`);
-
-  // Select top N
-  const topPatentIds = ranked.slice(0, topN).map(([id]) => id);
-  const topScores = ranked.slice(0, topN);
-  console.log(`\nSelected top ${topPatentIds.length} patents for vendor package`);
-  console.log(`Score range: ${topScores[topScores.length - 1]?.[1].compositeScore.toFixed(1)} - ${topScores[0]?.[1].compositeScore.toFixed(1)}`);
+  console.log(`\nSelected top ${topPatentIds.length} patents for vendor package (${scoreType} scoring)`);
+  if (topScorePairs.length > 0) {
+    console.log(`Score range: ${topScorePairs[topScorePairs.length - 1][1].toFixed(2)} - ${topScorePairs[0][1].toFixed(2)}`);
+  }
 
   // Print top patents summary
   const patentDetails = await prisma.patent.findMany({
@@ -359,11 +395,11 @@ async function main() {
   const detailMap = new Map(patentDetails.map(p => [p.patentId, p]));
 
   console.log('\nTop patents:');
-  for (const [id, score] of topScores.slice(0, 10)) {
+  for (const [id, score] of topScorePairs.slice(0, 10)) {
     const d = detailMap.get(id);
-    console.log(`  ${score.compositeScore.toFixed(1)} | ${id} | ${(d?.title || '').substring(0, 60)}`);
+    console.log(`  ${score.toFixed(2)} | ${id} | ${(d?.title || '').substring(0, 60)}`);
   }
-  if (topScores.length > 10) console.log(`  ... and ${topScores.length - 10} more`);
+  if (topScorePairs.length > 10) console.log(`  ... and ${topScorePairs.length - 10} more`);
 
   if (exportOnly) {
     console.log('\n--export-only: Skipping focus area creation and LLM jobs');

@@ -381,3 +381,93 @@ Generated comprehensive scoring summary with 5 files:
 5. Fix Config Drift — NETWORKING/SDN_NETWORK alignment ($0)
 6. Review COMPUTING/VIRTUALIZATION taxonomy ($0)
 7. Expand AUDIO coverage (~$2)
+
+---
+
+## Recent Changes (April 15-16, 2026)
+
+### 28. Base Score Formula v4 — Reweighting Away from Citations
+**Files modified (3 copies of calculateBaseScore):**
+- `src/api/services/portfolio-enrichment-service.ts` (line 121)
+- `src/api/services/patent-hydration-service.ts` (line 82)
+- `scripts/recalculate-base-scores.ts` (line 111)
+
+**Problem:** Old formula gave citations 71% of score weight. Patents with 0 citations but 15+ years remaining maxed at ~19 points, burying high-quality young patents discovered by LLM scoring.
+
+**New formula (v4):**
+
+| Component | Old | New | Max pts |
+|-----------|-----|-----|---------|
+| Citation Score | `log10(fwd+1) × 40` | `log10(fwd+1) × 20` | ~40 |
+| Time Score | `clamp(yrs/20, -0.5, 1) × 25` | `clamp(yrs/20, 0, 1) × 45` | 45 |
+| Velocity Score | `log10(cpy+1) × 20` | `log10(cpy+1) × 15` | ~15 |
+| Youth Bonus | N/A | Up to 10 pts for patents < 5 yrs old with 15+ yrs remaining | 10 |
+
+**Impact:** 29,321 patents recalculated. 11,773 increased score, 17,548 decreased. Citation weight dropped from 71% to ~50%, time weight rose from 29% to ~41%.
+
+**`--db` flag added** to `recalculate-base-scores.ts`: Writes updated scores to `Patent.baseScore` via Prisma in batches of 500.
+
+### 29. V3 Litigation Discovery Snapshot Regeneration
+After base score update + LLM gap fill, regenerated V3 snapshot: **31,026 patents** (up from 30,241). V3 scoring uses ~88% LLM quality weight with near-zero citation weight.
+
+### 30. Nutanix Sector Gap Analysis
+**File created:** `scripts/analyze-nutanix-sector-gaps.ts`
+
+Queries DB for LLM coverage across 22 Nutanix-relevant sectors (COMPUTING 6, NETWORKING 8, SECURITY 8). Found:
+- 95.7% LLM coverage in Nutanix sectors (only 785 gap patents)
+- 3,529 hidden gems (high V3 score, low base score or not in Nutanix FA)
+- All 785 gap patents subsequently scored via `run-sector-scoring.ts` (0 failures)
+
+### 31. V3 Score Type for Vendor Packages
+**File modified:** `scripts/create-sector-vendor-package.ts`
+
+Added `--score-type=v3|subsector` flag. When v3: queries active V3 snapshot's PatentScoreEntry for patents in target sector, sorted by V3 score desc. Surfaces patents with high LLM quality signals even if they haven't been through sub-sector scoring.
+
+### 32. Nutanix V3 Discovery Package (87 patents)
+**File created:** `scripts/create-nutanix-v3-package.ts`
+
+Combined package: 37 existing Nutanix Litigation Targets + top 50 V3 discoveries from Nutanix-relevant sectors. Nutanix-specific assessment questions targeting AHV, NCI, Flow Virtual Networking, Flow Network Security, Prism Central. Reuses existing product intelligence from AHV template.
+
+**Output:** Focus Area "Nutanix V3 Discovery — Combined" (87 patents, 10 per-patent questions, collective strategy).
+
+### 33. Litigation Export Service
+**File created:** `src/api/services/litigation-export-service.ts`
+
+Generates comprehensive CSV exports for focus areas: patent metadata, EAV scores, sub-sector scoring metrics with reasoning, V2/V3 snapshot scores. Used by `scripts/export-litigation-package.ts`.
+
+### 34. Nutanix V3 Infringement Scoring
+Scored 341 patent-product pairs (73 unique patents × 5 Nutanix products) using internal-v3 two-pass engine. Cost: ~$8.50.
+
+**Results:**
+- 29 patents score ≥0.80 (up from 11 in original 37-patent set)
+- 19 Tier 1 patents ≥0.85 (up from 9)
+- 15 patents show infringement signals across 3+ products
+- Top new discoveries: US11539659 (0.910), US11675585 (0.888), US11593148 (0.868)
+
+### 35. V3 Discovery Export Package
+**Output:** `output/vendor-exports/nutanix-v3-discovery-2026-04-16/`
+
+| File | Description |
+|------|-------------|
+| `nutanix-infringement-summary.md` | Full heat map: 87 patents × 5 products, strategic tiers, cross-product coverage |
+| `nutanix-patent-product-matrix.csv` | 87-row patent × product score matrix |
+| `nutanix-all-scores.csv` | 435 scored pairs with documents and narratives |
+| `collective-strategy.md` | Technology clusters, claim chains, vulnerability analysis, assertion strategy |
+| `litigation-package-*.csv` | Full patent detail export (227 columns, 87 patents, 90 metric keys) |
+| `vendor-targets.csv` | 87 patents with per-patent assessment scores |
+| `nutanix-assessment-results.csv` | Per-patent structured assessment results |
+| `vendor-targets-pivot.csv` | 732 patent-target pairs |
+
+### Supporting Scripts Created
+- `scripts/_generate-nutanix-v3-docs.ts` — JSON→markdown collective strategy + litigation CSV
+- `scripts/_generate-nutanix-v3-infringement-summary.ts` — Heat map summary from score cache
+- `scripts/_get-v3-unscored.ts` — Identifies unscored V3 patents per Nutanix product
+- `scripts/create-litigation-discovery-snapshot.ts` — V3 snapshot creation
+- `scripts/create-nutanix-litigation-focus-area.ts` — Nutanix litigation FA setup
+- `scripts/check-nutanix-patents-in-db.ts` — DB verification utility
+
+---
+
+## CLAUDE.md Rules (permanent)
+- **ALWAYS** include claims context in LLM scoring (`includeClaims: 'independent_only'`). Never use `includeClaims: 'none'` in production.
+- Base score formula v4 must stay in sync across 3 files (see §28 above).

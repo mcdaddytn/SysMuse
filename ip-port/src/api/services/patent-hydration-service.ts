@@ -97,18 +97,24 @@ export function calculateBaseScore(params: {
     }
   }
 
-  // Component 1: Citation Score (log-scaled)
-  const citationScore = Math.log10(forwardCitations + 1) * 40;
+  // Component 1: Citation Score (log-scaled, ×20 — was ×40)
+  const citationScore = Math.log10(forwardCitations + 1) * 20;
 
-  // Component 2: Time Score (remaining years factor)
-  const timeFactor = clamp(remainingYears / 20, -0.5, 1.0);
-  const timeScore = timeFactor * 25;
+  // Component 2: Time Score (remaining years factor, ×45 — was ×25, floor raised from -0.5 to 0)
+  const timeFactor = clamp(remainingYears / 20, 0, 1.0);
+  const timeScore = timeFactor * 45;
 
-  // Component 3: Velocity Score (citations per year)
+  // Component 3: Velocity Score (citations per year, ×15 — was ×20)
   const citationsPerYear = forwardCitations / yearsSinceGrant;
-  const velocityScore = Math.log10(citationsPerYear + 1) * 20;
+  const velocityScore = Math.log10(citationsPerYear + 1) * 15;
 
-  // Component 4: Sector Multiplier
+  // Component 4: Youth Bonus (up to 10 pts for patents < 5 yrs old with 15+ yrs remaining)
+  let youthBonus = 0;
+  if (yearsSinceGrant < 5 && remainingYears >= 15) {
+    youthBonus = 10 * (1 - yearsSinceGrant / 5);
+  }
+
+  // Component 5: Sector Multiplier
   let sectorMultiplier = 1.0;
   if (primarySector) {
     const damages = loadSectorDamages();
@@ -116,10 +122,10 @@ export function calculateBaseScore(params: {
     sectorMultiplier = 0.8 + (rating - 1) * 0.233;
   }
 
-  // Component 5: Expired Multiplier
+  // Component 6: Expired Multiplier
   const expiredMultiplier = remainingYears <= 0 ? 0.1 : 1.0;
 
-  const rawScore = citationScore + timeScore + velocityScore;
+  const rawScore = citationScore + timeScore + velocityScore + youthBonus;
   const finalScore = rawScore * sectorMultiplier * expiredMultiplier;
   return Math.round(finalScore * 100) / 100;
 }

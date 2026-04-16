@@ -1203,6 +1203,7 @@ router.get('/export', async (req: Request, res: Response) => {
       descending = 'true',
       columns: columnParam,
       portfolioId,
+      focusAreaId,
       ...filterParams
     } = req.query;
 
@@ -1230,6 +1231,7 @@ router.get('/export', async (req: Request, res: Response) => {
     const exportSnapshotScores = await getActiveSnapshotScores(portfolioId as string | undefined);
     const patents = await patentDataService.getAllPatents({
       portfolioId: portfolioId as string | undefined,
+      focusAreaId: focusAreaId as string | undefined,
       filters,
       sortBy: sortBy as string,
       descending: isDescending,

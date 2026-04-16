@@ -111,7 +111,8 @@ export const patentApi = {
     filters?: PortfolioFilters,
     columns?: string[],
     sortBy?: string,
-    descending?: boolean
+    descending?: boolean,
+    focusAreaId?: string
   ): Promise<void> {
     const params: Record<string, unknown> = {
       ...filters,
@@ -120,6 +121,9 @@ export const patentApi = {
     };
     if (columns && columns.length > 0) {
       params.columns = columns.join(',');
+    }
+    if (focusAreaId) {
+      params.focusAreaId = focusAreaId;
     }
 
     const response = await api.get('/patents/export', {
@@ -692,7 +696,7 @@ export const focusAreaApi = {
     return data;
   },
 
-  async fetchPatentData(id: string): Promise<{ total: number; uncached: number; fetched: number; failed: number; failedIds?: string[] }> {
+  async fetchPatentData(id: string): Promise<{ total: number; enriched: number; failed: number; skipped: number }> {
     const { data } = await api.post(`/focus-areas/${id}/fetch-patents`);
     return data;
   },
@@ -808,6 +812,25 @@ export const focusAreaApi = {
   async previewPromptTemplate(focusAreaId: string, templateId: string, patentId?: string): Promise<PromptPreviewResponse> {
     const { data } = await api.post(`/focus-areas/${focusAreaId}/prompt-templates/${templateId}/preview`, { patentId });
     return data;
+  },
+
+  // Litigation Package Export
+  async exportLitigationPackage(focusAreaId: string): Promise<void> {
+    const response = await api.get(`/focus-areas/${focusAreaId}/export-litigation-package`, {
+      responseType: 'blob',
+    });
+
+    const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+
+    const disposition = response.headers['content-disposition'];
+    const match = disposition?.match(/filename="?([^"]+)"?/);
+    link.download = match?.[1] || `litigation-package-${new Date().toISOString().split('T')[0]}.csv`;
+
+    link.click();
+    URL.revokeObjectURL(url);
   }
 };
 

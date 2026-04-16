@@ -316,6 +316,27 @@ const PROFILES: ScoringProfile[] = [
       prosecution_quality_score: 0.02,
     },
   },
+  {
+    id: 'litigation_discovery',
+    displayName: 'Litigation Discovery',
+    description: 'Surfaces patents with strong LLM quality signals regardless of citation history. Near-zero citation weight — designed for newer patents and those in emerging areas where citation data is sparse but 101 eligibility, design-around difficulty, and enforcement clarity indicate high litigation potential.',
+    category: 'litigation',
+    weights: {
+      competitor_citations: 0.01,       // Near-zero — don't penalize patents lacking competitor attention
+      adjusted_forward_citations: 0.02, // Near-zero — newer patents haven't accrued citations yet
+      years_remaining: 0.12,            // Remaining life still matters for litigation value
+      competitor_count: 0.00,           // Zero — irrelevant for discovery
+      competitor_density: 0.00,         // Zero — irrelevant for discovery
+      eligibility_score: 0.18,          // High — 101 eligibility is critical for litigation viability
+      validity_score: 0.15,             // High — must survive invalidity challenges
+      claim_breadth: 0.12,              // Broad claims = broader infringement surface
+      enforcement_clarity: 0.15,        // High — clear claims are enforceable claims
+      design_around_difficulty: 0.13,   // High — hard to design around = strong leverage
+      market_relevance_score: 0.05,     // Moderate — technology must be in active use
+      ipr_risk_score: 0.04,             // Low-moderate — factor in but don't over-weight
+      prosecution_quality_score: 0.03,  // Low — nice to have, not critical for discovery
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1191,6 +1212,29 @@ export const V2_ENHANCED_PRESETS = [
       market_relevance_score: 4,
       ipr_risk_score: 8,
       prosecution_quality_score: 6,
+    },
+    scaling: { ...DEFAULT_V2_ENHANCED_CONFIG.scaling },
+    invert: {},
+  },
+  {
+    id: 'litigation_discovery',
+    name: 'Litigation Discovery',
+    description: 'Surfaces patents with strong LLM quality signals regardless of citation history. Near-zero citation weight — designed for newer patents where 101 eligibility, design-around difficulty, and enforcement clarity indicate high litigation potential.',
+    isBuiltIn: true,
+    weights: {
+      competitor_citations: 1,          // Near-zero — don't penalize patents lacking competitor attention
+      adjusted_forward_citations: 2,    // Near-zero — newer patents haven't accrued citations yet
+      years_remaining: 12,              // Remaining life still matters for litigation value
+      competitor_count: 0,              // Zero — irrelevant for discovery
+      competitor_density: 0,            // Zero — irrelevant for discovery
+      eligibility_score: 18,            // High — 101 eligibility is critical for litigation viability
+      validity_score: 15,               // High — must survive invalidity challenges
+      claim_breadth: 12,                // Broad claims = broader infringement surface
+      enforcement_clarity: 15,          // High — clear claims are enforceable claims
+      design_around_difficulty: 13,     // High — hard to design around = strong leverage
+      market_relevance_score: 5,        // Moderate — technology must be in active use
+      ipr_risk_score: 4,                // Low-moderate
+      prosecution_quality_score: 3,     // Low — nice to have, not critical for discovery
     },
     scaling: { ...DEFAULT_V2_ENHANCED_CONFIG.scaling },
     invert: {},

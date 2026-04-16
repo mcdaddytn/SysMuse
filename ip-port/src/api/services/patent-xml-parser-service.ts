@@ -14,6 +14,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
 import { PrismaClient } from '@prisma/client';
+import { calculateRemainingYears, calculateBaseScore } from './patent-hydration-service.js';
+import { getPrimarySectorAsync, getSuperSectorAsync } from '../utils/sector-mapper.js';
+import { formatXmlDate } from './bulk-patent-search-service.js';
 
 const prisma = new PrismaClient();
 
@@ -835,4 +838,231 @@ export function extractClaimsBatch(
   }
 
   return results;
+}
+
+// ============================================================================
+// Full Patent Enrichment from XML
+// ============================================================================
+
+export interface PatentEnrichmentResult {
+  patentId: string;
+  status: 'enriched' | 'skipped' | 'failed';
+  error?: string;
+}
+
+/**
+ * Extract full metadata from a single patent XML file using regex
+ * (same patterns as hydrateBlock() in manifest-search-service.ts).
+ */
+function extractMetadataFromXml(xmlText: string): {
+  title: string;
+  abstract: string | null;
+  assignees: string[];
+  inventors: string[];
+  grantDate: string | null;
+  filingDate: string | null;
+} {
+  // Title
+  const title = xmlText.match(/<invention-title[^>]*>([^<]+)<\/invention-title>/)?.[1]?.trim() || '';
+
+  // Abstract
+  const abstractMatch = xmlText.match(/<abstract[^>]*>([\s\S]*?)<\/abstract>/);
+  let abstract: string | null = null;
+  if (abstractMatch) {
+    abstract = abstractMatch[1]
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Assignee organizations
+  const assignees: string[] = [];
+  const assigneeRegex = /<assignee>\s*<addressbook>\s*<orgname>([^<]+)<\/orgname>/gs;
+  let m;
+  while ((m = assigneeRegex.exec(xmlText)) !== null) {
+    assignees.push(m[1].trim());
+  }
+
+  // Inventors (applicant-inventor first, fallback to <inventor>)
+  const inventors: string[] = [];
+  const inventorRegex = /<applicant[^>]*app-type="applicant-inventor"[^>]*>[\s\S]*?<last-name>([^<]+)<\/last-name>[\s\S]*?<first-name>([^<]+)<\/first-name>/gs;
+  while ((m = inventorRegex.exec(xmlText)) !== null) {
+    inventors.push(`${m[2].trim()} ${m[1].trim()}`);
+  }
+  if (inventors.length === 0) {
+    const invRegex2 = /<inventor[^>]*>[\s\S]*?<last-name>([^<]+)<\/last-name>[\s\S]*?<first-name>([^<]+)<\/first-name>/gs;
+    while ((m = invRegex2.exec(xmlText)) !== null) {
+      inventors.push(`${m[2].trim()} ${m[1].trim()}`);
+    }
+  }
+
+  // Grant date from <publication-reference>...<date>
+  const grantDateRaw = xmlText.match(
+    /<publication-reference>\s*<document-id[^>]*>[\s\S]*?<date>(\d{8})<\/date>/
+  )?.[1];
+  const grantDate = grantDateRaw ? formatXmlDate(grantDateRaw) : null;
+
+  // Filing date from <application-reference>...<date>
+  const filingDateRaw = xmlText.match(
+    /<application-reference[^>]*>[\s\S]*?<date>(\d{8})<\/date>/
+  )?.[1];
+  const filingDate = filingDateRaw ? formatXmlDate(filingDateRaw) : null;
+
+  return { title, abstract, assignees, inventors, grantDate, filingDate };
+}
+
+/**
+ * Enrich a single patent with full metadata from its USPTO XML file.
+ * Reads the XML, extracts title/abstract/dates/assignees/inventors/CPC,
+ * computes derived fields, and upserts into Patent + PatentCpc tables.
+ */
+export async function enrichPatentFromXml(
+  patentId: string,
+  exportDir: string
+): Promise<PatentEnrichmentResult> {
+  try {
+    const xmlPath = findXmlPath(patentId, exportDir);
+    if (!xmlPath) {
+      return { patentId, status: 'failed', error: 'XML file not found' };
+    }
+
+    const xmlText = fs.readFileSync(xmlPath, 'utf-8');
+    const meta = extractMetadataFromXml(xmlText);
+
+    if (!meta.title) {
+      return { patentId, status: 'failed', error: 'No title found in XML' };
+    }
+
+    // Parse CPC codes using existing structured parser
+    const cpcData = parsePatentXml(xmlPath);
+    const cpcCodes = cpcData.cpcClassifications.map(c => c.code);
+
+    // Compute derived fields
+    const dateForTerm = meta.filingDate || meta.grantDate;
+    const { remainingYears, isExpired } = calculateRemainingYears(dateForTerm);
+
+    const primarySector = await getPrimarySectorAsync(cpcCodes, meta.title, meta.abstract || undefined);
+    const superSector = primarySector ? await getSuperSectorAsync(primarySector) : null;
+
+    // Get existing patent to preserve forwardCitations
+    const existing = await prisma.patent.findUnique({
+      where: { patentId },
+      select: { forwardCitations: true },
+    });
+    const forwardCitations = existing?.forwardCitations || 0;
+
+    const baseScore = calculateBaseScore({
+      forwardCitations,
+      remainingYears,
+      grantDate: meta.grantDate,
+      primarySector,
+    });
+
+    // Upsert Patent record
+    await prisma.patent.upsert({
+      where: { patentId },
+      create: {
+        patentId,
+        title: meta.title,
+        abstract: meta.abstract,
+        grantDate: meta.grantDate,
+        filingDate: meta.filingDate,
+        assignee: meta.assignees.join('; '),
+        inventors: meta.inventors,
+        forwardCitations,
+        remainingYears,
+        isExpired,
+        baseScore,
+        primarySector,
+        superSector,
+        primaryCpc: cpcData.primaryCpc?.code || null,
+        hasXmlData: true,
+      },
+      update: {
+        title: meta.title,
+        abstract: meta.abstract,
+        grantDate: meta.grantDate,
+        filingDate: meta.filingDate,
+        assignee: meta.assignees.join('; '),
+        inventors: meta.inventors,
+        remainingYears,
+        isExpired,
+        baseScore,
+        primarySector,
+        superSector,
+        primaryCpc: cpcData.primaryCpc?.code || null,
+        hasXmlData: true,
+      },
+    });
+
+    // Upsert PatentCpc records with isInventive designation
+    for (const cpc of cpcData.cpcClassifications) {
+      await prisma.patentCpc.upsert({
+        where: { patentId_cpcCode: { patentId, cpcCode: cpc.code } },
+        create: {
+          patentId,
+          cpcCode: cpc.code,
+          isInventive: cpc.designation === 'I',
+        },
+        update: {
+          isInventive: cpc.designation === 'I',
+        },
+      });
+    }
+
+    return { patentId, status: 'enriched' };
+  } catch (error) {
+    return { patentId, status: 'failed', error: (error as Error).message };
+  }
+}
+
+/**
+ * Batch enrich patents from USPTO XML files.
+ * Skips patents that already have hasXmlData=true and a non-empty title.
+ */
+export async function enrichPatentsFromXml(
+  patentIds: string[],
+  exportDir: string,
+  onProgress?: (msg: string) => void
+): Promise<{ enriched: string[]; failed: string[]; skipped: string[] }> {
+  const enriched: string[] = [];
+  const failed: string[] = [];
+  const skipped: string[] = [];
+
+  // Check which patents already have XML data
+  const existing = await prisma.patent.findMany({
+    where: { patentId: { in: patentIds } },
+    select: { patentId: true, title: true, hasXmlData: true },
+  });
+  const existingMap = new Map(existing.map(p => [p.patentId, p]));
+
+  for (let i = 0; i < patentIds.length; i++) {
+    const patentId = patentIds[i];
+    const row = existingMap.get(patentId);
+
+    // Skip if already enriched with XML data and has a title
+    if (row?.hasXmlData && row.title && row.title.length > 0) {
+      skipped.push(patentId);
+      continue;
+    }
+
+    const result = await enrichPatentFromXml(patentId, exportDir);
+
+    if (result.status === 'enriched') {
+      enriched.push(patentId);
+    } else if (result.status === 'failed') {
+      failed.push(patentId);
+      if (onProgress) onProgress(`Failed ${patentId}: ${result.error}`);
+    }
+
+    if (onProgress && (i + 1) % 10 === 0) {
+      onProgress(`Progress: ${i + 1}/${patentIds.length} (enriched: ${enriched.length}, failed: ${failed.length}, skipped: ${skipped.length})`);
+    }
+  }
+
+  if (onProgress) {
+    onProgress(`Done: ${enriched.length} enriched, ${failed.length} failed, ${skipped.length} skipped`);
+  }
+
+  return { enriched, failed, skipped };
 }

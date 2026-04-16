@@ -781,13 +781,25 @@ function mapPatentToDTO(patent: any): PatentDTO {
  */
 export async function getAllPatents(options: {
   portfolioId?: string;
+  focusAreaId?: string;
   filters?: PatentFilters;
   sortBy?: string;
   descending?: boolean;
   snapshotScores?: SnapshotScoreMaps;
 }): Promise<PatentDTO[]> {
-  const { portfolioId, filters, sortBy = 'score', descending = true, snapshotScores } = options;
-  const where = buildWhereClause(portfolioId, undefined, filters);
+  const { portfolioId, focusAreaId, filters, sortBy = 'score', descending = true, snapshotScores } = options;
+
+  // Pre-resolve focus area patent IDs if provided
+  let focusAreaPatentIds: string[] | undefined;
+  if (focusAreaId) {
+    const faPatents = await prisma.focusAreaPatent.findMany({
+      where: { focusAreaId },
+      select: { patentId: true },
+    });
+    focusAreaPatentIds = faPatents.map(fp => fp.patentId);
+  }
+
+  const where = buildWhereClause(portfolioId, focusAreaPatentIds, filters);
 
   const scoreSortField = getScoreSortField(sortBy);
   const orderBy = buildOrderBy(sortBy, descending, scoreSortField);

@@ -71,6 +71,8 @@ const parsedPatentIds = ref<string[]>([]);
 const patentPreviews = ref<Record<string, PatentPreview | null>>({});
 const loadingPreviews = ref(false);
 const fetchingData = ref(false);
+const exporting = ref(false);
+const exportingLitPkg = ref(false);
 let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Parse patent IDs from input
@@ -531,25 +533,25 @@ async function fetchPatentData() {
   fetchingData.value = true;
   try {
     const result = await focusAreaApi.fetchPatentData(focusAreaId.value);
-    if (result.fetched > 0) {
+    if (result.enriched > 0) {
       $q.notify({
         type: 'positive',
-        message: `Fetched data for ${result.fetched} patent(s) from PatentsView API`,
+        message: `Enriched ${result.enriched} patent(s) from USPTO XML`,
         timeout: 3000,
       });
       // Refresh the patent list
       await loadPatents();
-    } else if (result.uncached === 0) {
+    } else if (result.skipped === result.total) {
       $q.notify({
         type: 'info',
-        message: 'All patents already have cached data',
+        message: 'All patents already have XML data',
         timeout: 3000,
       });
     }
     if (result.failed > 0) {
       $q.notify({
         type: 'warning',
-        message: `${result.failed} patent(s) could not be fetched${result.failedIds ? ': ' + result.failedIds.slice(0, 5).join(', ') + (result.failedIds.length > 5 ? '...' : '') : ''}`,
+        message: `${result.failed} patent(s) could not be enriched (XML not found or parse error)`,
         timeout: 5000,
       });
     }
@@ -561,6 +563,67 @@ async function fetchPatentData() {
     });
   } finally {
     fetchingData.value = false;
+  }
+}
+
+// Export focus area patents as CSV
+async function exportToCSV() {
+  if (faPatentsTotal.value === 0) return;
+  exporting.value = true;
+  try {
+    const columnFields = patentsStore.visibleColumns.map(col =>
+      typeof col.field === 'string' ? col.field : col.name
+    );
+
+    const filters: Record<string, unknown> = {};
+    if (searchText.value) filters.search = searchText.value;
+    if (selectedAffiliates.value.length > 0) filters.affiliates = selectedAffiliates.value;
+    if (selectedSuperSectors.value.length > 0) filters.superSectors = selectedSuperSectors.value;
+    if (scoreMin.value != null) filters.scoreMin = scoreMin.value;
+    if (scoreMax.value != null) filters.scoreMax = scoreMax.value;
+    if (yearsMin.value != null) filters.yearsMin = yearsMin.value;
+    if (yearsMax.value != null) filters.yearsMax = yearsMax.value;
+    if (competitorCitesMin.value != null) filters.competitorCitesMin = competitorCitesMin.value;
+    if (competitorCitesMax.value != null) filters.competitorCitesMax = competitorCitesMax.value;
+    if (forwardCitesMin.value != null) filters.forwardCitesMin = forwardCitesMin.value;
+    if (forwardCitesMax.value != null) filters.forwardCitesMax = forwardCitesMax.value;
+
+    await patentApi.exportCSV(
+      filters,
+      columnFields,
+      faPagination.value.sortBy,
+      faPagination.value.descending,
+      focusAreaId.value
+    );
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : 'Failed to export',
+      timeout: 5000,
+    });
+  } finally {
+    exporting.value = false;
+  }
+}
+
+// Export litigation package CSV
+async function exportLitigationPackage() {
+  exportingLitPkg.value = true;
+  try {
+    await focusAreaApi.exportLitigationPackage(focusAreaId.value);
+    $q.notify({
+      type: 'positive',
+      message: 'Litigation package downloaded',
+      timeout: 3000,
+    });
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : 'Failed to export litigation package',
+      timeout: 5000,
+    });
+  } finally {
+    exportingLitPkg.value = false;
   }
 }
 
@@ -1264,9 +1327,19 @@ onMounted(async () => {
             <!-- Add Patents -->
             <q-btn flat icon="add" label="Add" @click="showAddPatentDialog = true" />
 
-            <!-- Fetch Patent Data -->
-            <q-btn flat icon="cloud_download" label="Fetch Data" :loading="fetchingData" @click="fetchPatentData">
-              <q-tooltip>Fetch data from PatentsView API for uncached patents</q-tooltip>
+            <!-- Export CSV -->
+            <q-btn flat icon="download" label="Export" :loading="exporting" @click="exportToCSV">
+              <q-tooltip>Export {{ faPatentsTotal }} filtered patents as CSV</q-tooltip>
+            </q-btn>
+
+            <!-- Litigation Package Export -->
+            <q-btn flat icon="gavel" label="Litigation Package" :loading="exportingLitPkg" @click="exportLitigationPackage">
+              <q-tooltip>Export comprehensive litigation package CSV with all scores and LLM reasoning</q-tooltip>
+            </q-btn>
+
+            <!-- Load Patent Data -->
+            <q-btn flat icon="database" label="Load Patent Data" :loading="fetchingData" @click="fetchPatentData">
+              <q-tooltip>Enrich patent metadata from USPTO XML files</q-tooltip>
             </q-btn>
 
             <!-- Filter Toggle -->

@@ -17,6 +17,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import { generateLitigationPackageCsv } from '../src/api/services/litigation-export-service.js';
 
 const prisma = new PrismaClient();
 const BROADCOM_PORTFOLIO_NAME = 'broadcom-core';
@@ -794,6 +795,15 @@ async function exportVendorPackage(focusAreaId: string, sectorName: string, sect
     }
   }
 
+  // Write litigation package CSV (all structured LLM metrics, EAV scores, sub-sector scores)
+  try {
+    const litResult = await generateLitigationPackageCsv(focusAreaId);
+    fs.writeFileSync(path.join(outputDir, 'litigation-package-all-fields-export.csv'), litResult.csv);
+    console.log(`  litigation-package-all-fields-export.csv: ${litResult.patentCount} patents, ${litResult.metricKeyCount} metric keys`);
+  } catch (err) {
+    console.warn('  Warning: Could not generate litigation package CSV:', (err as Error).message);
+  }
+
   // Write README
   const readme = `# ${sectorDisplayName} Sector Vendor Export Package
 
@@ -810,6 +820,9 @@ async function exportVendorPackage(focusAreaId: string, sectorName: string, sect
 | \`vendor-targets-pivot.csv\` | One row per patent-target pair with TargetProduct and TargetUrl |
 | \`tier1-assessment-results.csv\` | Full per-patent assessment metrics |
 | \`collective-strategy.md\` | Cross-patent litigation strategy narrative |
+| \`litigation-package-all-fields-export.csv\` | Full structured LLM metrics, EAV scores, and sub-sector scoring data |
+| \`${sectorName}-infringement-heatmap.md\` | Patent × company infringement score matrix with tier rankings |
+| \`${sectorName}-patent-company-matrix.csv\` | Infringement scores in CSV format for analysis |
 | \`README.md\` | This file |
 `;
 

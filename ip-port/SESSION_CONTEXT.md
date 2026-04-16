@@ -468,6 +468,87 @@ Scored 341 patent-product pairs (73 unique patents × 5 Nutanix products) using 
 
 ---
 
+---
+
+## Recent Changes (April 16, 2026 — Session 2)
+
+### 36. Sector Infringement Heatmap Batches (7 sectors)
+Ran infringement pair scoring for 7 initial sectors, producing standardized 8-file packages:
+
+| Sector | Patents | Pairs | Very-High | Tier 1 | Dominant Target |
+|--------|---------|-------|-----------|--------|-----------------|
+| computing-runtime | 74 | 391 | 22 | — | — |
+| network-switching | 74 | 444 | 33 | — | — |
+| network-auth-access | 43 | 228 | 9 | — | — |
+| computing-systems | 64 | 256 | 27 | 17 | NVIDIA (23 >=0.80) |
+| network-management | 36 | 288 | 10 | 10 | Cisco (3 at 0.98) |
+| network-threat-protection | 35 | 280 | 9 | 9 | CrowdStrike/Darktrace |
+| network-secure-compute | 35 | 210 | 19 | 8 | Nutanix (14 >=0.80) |
+
+All packages at `output/vendor-exports/{sector}-2026-04-16/` with 8 standard files each.
+
+**Scripts created per sector:** `_build-{abbrev}-infringement-targets.ts` + `_generate-{abbrev}-infringement-summary.ts`
+
+### 37. V3 Reranking + Infringement for New Sectors
+
+**V3 Reranking Analysis:**
+Compared V3 top-35 vs existing subsector top-35 for candidate sectors. Found massive divergence:
+- network-protocols: 35/35 new patents (0 overlap)
+- computing-auth-boot: 24/24 new (0 overlap)
+- wireless-infrastructure: 27/31 new
+- computing-data-protection: 21/26 new
+- computing-os-security: 19/20 new
+
+**Wireless-Infrastructure V3 Package (STRONG RESULTS):**
+- 65 patents (35 V3 + 30 original), 686 pairs, 179 Pass 2, 0 failures
+- **18 very-high, 13 Tier 1**
+- Ericsson (12 >=0.80), Mavenir (9 >=0.80) dominant for RIC/Cloud RAN patents
+- CommScope (4 >=0.80), Ubiquiti for Wi-Fi/MIMO patents
+- Top: US9408208 (0.96 CommScope), US11831517 (0.95 Mavenir/Ericsson/PW/Nokia)
+- Qualcomm poor match (wrong product docs)
+
+**Network-Protocols V3 Package (WEAK RESULTS):**
+- 69 patents (35 V3 + 36 original), 685 pairs, only 12 Pass 2, 0 failures
+- **4 very-high, 2 Tier 1 — very low yield**
+- V3-selected patents (distributed networking, FaaS, DPU) didn't match router/switch docs
+- Only older SoC/TCP patents scored well vs Cisco
+
+**Key Insight:** V3 reranking effectiveness depends on alignment between patent themes and available product docs. Cloud-native/RIC patents match well against Ericsson/Mavenir docs. Abstract distributed systems patents don't match traditional router datasheets.
+
+### Scripts Created This Session
+- `scripts/_build-wi-infringement-targets.ts` — wireless-infrastructure targets (11 products, 8 companies)
+- `scripts/_generate-wi-infringement-summary.ts` — wireless-infrastructure heatmap (8 companies)
+- `scripts/_build-np-infringement-targets.ts` — network-protocols targets (10 products, 5 companies)
+- `scripts/_generate-np-infringement-summary.ts` — network-protocols heatmap (5 companies)
+
+### Next Steps — Remaining V3 Sectors
+| # | Sector | V3 New | Est. Cost | Expected Quality |
+|---|--------|--------|-----------|------------------|
+| 1 | computing-os-security | 19/20 new | ~$9 | Good (CrowdStrike, Palo Alto, Cisco ISE) |
+| 2 | computing-data-protection | 21/26 new | ~$9 | Moderate (Varonis, IBM, Dell) |
+| 3 | computing-auth-boot | 24/24 new | ~$9 | Good (Okta, Cisco ISE, IBM Verify) |
+
+### Pipeline Reference
+```bash
+# 1. Create V3 vendor package
+npx tsx scripts/create-sector-vendor-package.ts <SECTOR> --score-type=v3 --top=35
+
+# 2. Build infringement targets
+npx tsx scripts/_build-{abbrev}-infringement-targets.ts
+
+# 3. Run infringement scoring
+npx tsx scripts/score-infringement.ts --from-targets output/{sector}-infringement-targets.csv --max-docs-per-product 1 --concurrency 6
+
+# 4. Generate heatmap
+npx tsx scripts/_generate-{abbrev}-infringement-summary.ts
+
+# 5. Export litigation CSV + copy to package
+npx tsx scripts/export-litigation-package.ts --id <focus-area-id>
+cp output/litigation-packages/litigation-package-*.csv output/vendor-exports/{sector}-2026-04-16/litigation-package-all-fields-export.csv
+```
+
+---
+
 ## CLAUDE.md Rules (permanent)
 - **ALWAYS** include claims context in LLM scoring (`includeClaims: 'independent_only'`). Never use `includeClaims: 'none'` in production.
 - Base score formula v4 must stay in sync across 3 files (see §28 above).

@@ -20,6 +20,8 @@ import { enrichPatentsFromXml } from '../services/patent-xml-parser-service.js';
 import { matchAffiliate } from '../services/uspto-import-service.js';
 import { hasPatentData, fetchAndCachePatents } from '../services/patent-fetch-service.js';
 import { generateLitigationPackageCsv } from '../services/litigation-export-service.js';
+import { getPatentsByIds } from '../services/uspto-query-service.js';
+import { extractPatentXmlsBySource } from '../services/patent-xml-extractor-service.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -586,6 +588,29 @@ router.post('/:id/fetch-patents', async (req: Request, res: Response) => {
       return res.json({ total: 0, enriched: 0, failed: 0, skipped: 0 });
     }
 
+    // Step 1: Extract XMLs from weekly ZIP files for patents not yet extracted
+    console.log(`[FocusArea] Looking up ${allIds.length} patents in USPTO index...`);
+    const indexRecords = await getPatentsByIds(allIds);
+    const sourceMap = new Map<string, string[]>();
+    for (const [patentId, record] of indexRecords) {
+      if (record.xml_source) {
+        const list = sourceMap.get(record.xml_source) || [];
+        list.push(patentId);
+        sourceMap.set(record.xml_source, list);
+      }
+    }
+
+    let xmlExtracted = 0;
+    if (sourceMap.size > 0) {
+      console.log(`[FocusArea] Extracting XMLs from ${sourceMap.size} ZIP files...`);
+      const extractResult = await extractPatentXmlsBySource(sourceMap, (msg) => console.log(`[FocusArea] ${msg}`));
+      xmlExtracted = extractResult.extracted;
+      console.log(`[FocusArea] XML extraction: ${extractResult.extracted} extracted, ${extractResult.alreadyExist} already existed, ${extractResult.notFound} not found`);
+    } else {
+      console.log(`[FocusArea] No xml_source data found in USPTO index for these patents`);
+    }
+
+    // Step 2: Enrich patents from the extracted XML files
     console.log(`[FocusArea] Enriching ${allIds.length} patents from USPTO XML for focus area ${id}...`);
     const result = await enrichPatentsFromXml(allIds, exportDir, (msg) => console.log(`[FocusArea] ${msg}`));
 
@@ -689,6 +714,7 @@ router.post('/:id/fetch-patents', async (req: Request, res: Response) => {
       enriched: result.enriched.length,
       failed: result.failed.length,
       skipped: result.skipped.length,
+      xmlExtracted,
       portfolioLinks,
     });
   } catch (error) {

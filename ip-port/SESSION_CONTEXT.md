@@ -632,6 +632,81 @@ Handles semicolon-separated assignees, is idempotent, and non-fatal on error.
 
 ---
 
+## Recent Changes (April 17, 2026 — Session 5)
+
+### 41. loadEnrichedPatents Database Fallback Fix
+**File modified:** `src/api/services/prompt-template-service.ts`
+
+**Problem:** Per-patent LLM assessments were generating prompts with empty patent content (no title, abstract, claims, assignee). Root cause was a 3-layer failure:
+1. `loadEnrichedPatents()` was synchronous but needed to be `async` for DB fallback
+2. The DB fallback itself crashed silently: `grantDate.toISOString()` failed because `grantDate` is a string in Prisma, not a Date object
+3. The outer `catch {}` swallowed the error, so zero patents got enriched via DB
+
+**Fix:**
+- Made `loadEnrichedPatents()` async, updated all call sites to `await`
+- Added DB fallback: queries Prisma for patent metadata + extracts claims from USPTO XML
+- Fixed `grantDate.toISOString()` → `String(dbp.grantDate).split('T')[0]`
+- Added `extractClaimsText` import from patent-xml-parser-service
+- Updated `previewTemplate` to async in focus-areas.routes.ts
+
+**Result:** All 44 BB-Google patents now have title, abstract, claims, assignee in LLM prompts. Assessment quality improved significantly (lit scores 8/10 vs previous 3/10).
+
+### 42. Blackberry-Google Vendor Package Regeneration
+Re-executed per-patent assessment (44 patents) and collective strategy with proper patent content. Exported full 9-file package to `output/vendor-exports/bb-google-2026-04-17/`.
+
+### 43. Nutanix Expanded Analysis — 102 New Patents Discovered
+Cross-referenced 87 existing Nutanix patents against 609 unique patents from 11 sector vendor packages. Found 548 patents not in original set, 102 of which explicitly mention Nutanix/HCI/AHV/Prism or target hyperconverged infrastructure.
+
+### 44. Nutanix Expanded V3 Discovery Package (189 patents)
+**Files created:**
+- `scripts/_create-nutanix-expanded-package.ts` — Pool builder + V3 scoring + target CSV generation
+- `scripts/_export-nutanix-expanded-package.ts` — Full package export with heatmap, CSVs, LLM assessments, litigation-package-all-fields-export
+- `output/nutanix-expanded-pool.json` — 87 existing + 102 new patent IDs with metadata
+- `output/nutanix-expanded-v3-ranking.csv` — V3 Litigation Discovery rankings for all 189
+- `output/nutanix-targets-{product}.csv` — Per-product infringement target CSVs (5 files)
+
+**V3 Scoring:** All 189 patents scored with Litigation Discovery preset (low citation weight). V3 snapshot: `cmo0og0u400018ct6s6322wuc` (31,026 patents).
+
+**Infringement Scoring:** 510 patent-product pairs scored (102 new patents × 5 Nutanix products) via 5 parallel nohup processes with `--max-docs-per-product 8`.
+
+**Results:**
+- 39 very-high (>=0.80) — 20 NEW
+- 71 high-signal (>=0.65) — 36 NEW
+- 23 multi-product hits (>=3 at >=0.50) — 14 NEW
+- Max score: 0.949 (US9083609 vs FNS)
+- Strongest NEW patents: US11683214 (0.93 FVN, 4/5 products), US11496392 (0.91 FVN, 4/5 products), US11743168 (0.89 FVN)
+
+**Export package:** `output/vendor-exports/nutanix-expanded-2026-04-17/`
+
+| File | Description |
+|------|-------------|
+| `litigation-package-all-fields-export.csv` | Full data extract (189 patents, 265 columns, 109 metric keys) |
+| `nutanix-infringement-heatmap.md` | Full heatmap with per-product breakdown, strategic tiers |
+| `nutanix-patent-product-matrix.csv` | Patent × Product score matrix |
+| `nutanix-all-scores.csv` | 774 scored pairs with narratives |
+| `nutanix-comparative-ranking.csv` | Composite ranking with NEW/EXISTING flags |
+| `nutanix-v3-ranking.csv` | V3 scores |
+| `README.md` | Package manifest |
+
+**Not yet generated (requires LLM execution):**
+- `nutanix-collective-strategy.md` — Cross-patent assertion strategy
+- `nutanix-assessment-results.csv` — Per-patent structured assessment
+- `vendor-targets.csv` / `vendor-targets-pivot.csv` — Assertion target mapping
+
+Focus Area: "Nutanix V3 Expanded Discovery" (ID: cmo35m8wj0000a75kt4ci98cp, 189 patents)
+
+### Design Task: Consolidate Vendor Package Pipeline
+**Status:** Noted for future implementation
+
+Current state: multiple per-company/sector scripts (`_build-*`, `_generate-*`, `_create-*`, `_export-*`) with duplicated logic and inconsistent naming. Need to:
+1. Abstract into a single data-driven service with config per company/product
+2. Standardize output file set across all packages (all packages get same file types)
+3. Make triggerable from GUI with configurable options (model, question set, patent selection)
+4. Consolidate structured assessment questions into taxonomy-aware question bank
+5. Clean up naming conventions (consistent slugs, file names, directory structure)
+
+---
+
 ## CLAUDE.md Rules (permanent)
 - **ALWAYS** include claims context in LLM scoring (`includeClaims: 'independent_only'`). Never use `includeClaims: 'none'` in production.
 - Base score formula v4 must stay in sync across 3 files (see §28 above).

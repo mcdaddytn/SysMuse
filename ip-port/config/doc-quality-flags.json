@@ -1,0 +1,177 @@
+{
+  "description": "Product documentation quality flags for infringement scoring. Products flagged as 'insufficient' should be quarantined - scores may be unreliable due to thin/low-quality docs. Review and re-score after doc expansion.",
+  "updated": "2026-04-16",
+  "products": {
+    "microsoft/hyper-v": {
+      "quality": "insufficient",
+      "reason": "33% YouTube transcripts (2 of 12 docs), lacks deep technical coverage of Hyper-V internals",
+      "totalDocs": 12,
+      "totalSizeKB": 6100,
+      "youtubePercent": 33,
+      "sectors": ["computing-runtime"],
+      "action": "quarantine",
+      "notes": "Scores likely depressed vs IBM PowerVM (417K rich docs). Need official Microsoft Hyper-V admin guides, architecture docs."
+    },
+    "microsoft/hyper-v-network-virtualization": {
+      "quality": "insufficient",
+      "reason": "56% YouTube-derived content (15 transcripts + 3 YT HTML of 27 docs)",
+      "totalDocs": 27,
+      "totalSizeKB": 8900,
+      "youtubePercent": 56,
+      "sectors": ["computing-runtime"],
+      "action": "quarantine",
+      "notes": "Most YouTube-heavy product in the set. Need Microsoft Learn HNV docs, SCVMM network virtualization guides."
+    },
+    "citrix/xenserver": {
+      "quality": "insufficient",
+      "reason": "Only 9 docs total, 33% YouTube content, limited technical depth",
+      "totalDocs": 9,
+      "totalSizeKB": 3800,
+      "youtubePercent": 33,
+      "sectors": ["computing-runtime"],
+      "action": "quarantine",
+      "notes": "Need XenServer admin guide, XenAPI reference, XAPI toolstack docs."
+    },
+    "microsoft/azure-virtual-machines": {
+      "quality": "adequate",
+      "reason": "4 docs, all professional sources (no YouTube), but limited volume",
+      "totalDocs": 4,
+      "totalSizeKB": 1500,
+      "youtubePercent": 0,
+      "sectors": ["computing-runtime"],
+      "action": "ok",
+      "notes": "Good quality per doc but could use more volume. Azure VM architecture deep-dives would help."
+    },
+    "microsoft/hyper-v-virtual-switch": {
+      "quality": "good",
+      "reason": "11 docs, all solid technical sources (Simple Talk, Microsoft Learn), no YouTube",
+      "totalDocs": 11,
+      "totalSizeKB": 5400,
+      "youtubePercent": 0,
+      "sectors": ["computing-runtime"],
+      "action": "ok",
+      "notes": "Best Microsoft product for doc quality."
+    },
+    "cisco-systems/cisco-application-centric-infrastructure-aci": {
+      "quality": "good",
+      "reason": "60 docs, 11.4MB total, comprehensive ACI virtualization guide",
+      "totalDocs": 60,
+      "totalSizeKB": 11420,
+      "youtubePercent": 0,
+      "sectors": ["network-switching"],
+      "action": "ok",
+      "notes": ""
+    },
+    "juniper-networks/apstra-data-center-director": {
+      "quality": "good",
+      "reason": "28 docs, 5.7MB, focused data center management content",
+      "totalDocs": 28,
+      "totalSizeKB": 5676,
+      "youtubePercent": 0,
+      "sectors": ["network-switching"],
+      "action": "ok",
+      "notes": ""
+    },
+    "arista-networks/arista-eos": {
+      "quality": "adequate",
+      "reason": "7 docs, 1.9MB — functional but thin for broad patent coverage",
+      "totalDocs": 7,
+      "totalSizeKB": 1863,
+      "youtubePercent": 0,
+      "sectors": ["network-switching"],
+      "action": "ok",
+      "notes": "Could benefit from additional EOS configuration guides, VXLAN/EVPN docs."
+    },
+    "arista-networks/cloudvision": {
+      "quality": "good",
+      "reason": "27 docs, 6.7MB, solid CloudVision coverage",
+      "totalDocs": 27,
+      "totalSizeKB": 6681,
+      "youtubePercent": 0,
+      "sectors": ["network-switching"],
+      "action": "ok",
+      "notes": ""
+    },
+    "dell-technologies/smartfabric-services": {
+      "quality": "adequate",
+      "reason": "14 docs, 1.6MB — covers SmartFabric but limited depth",
+      "totalDocs": 14,
+      "totalSizeKB": 1572,
+      "youtubePercent": 0,
+      "sectors": ["network-switching"],
+      "action": "ok",
+      "notes": "Could use PowerSwitch OS10 config guides, Dell networking architecture docs."
+    },
+    "hpe-hewlett-packard-enterprise/hpe-aruba-networking-virtual-switching-extension-vsx": {
+      "quality": "fair",
+      "reason": "10 docs (4.7MB) but includes YouTube content, some large YouTube-derived HTML",
+      "totalDocs": 10,
+      "totalSizeKB": 4681,
+      "youtubePercent": 30,
+      "sectors": ["network-switching"],
+      "action": "monitor",
+      "notes": "VSX config guide and reference architecture are solid. YouTube content inflates count. Existing scores already very strong (11 >= 0.80)."
+    },
+    "hpe-hewlett-packard-enterprise/hpe-aruba-networking-edgeconnect-sd-wan": {
+      "quality": "good",
+      "reason": "5 docs, 2.9MB, all professional sources — SD-WAN orchestrator guide is 1.5MB",
+      "totalDocs": 5,
+      "totalSizeKB": 2952,
+      "youtubePercent": 0,
+      "sectors": ["network-switching"],
+      "action": "ok",
+      "notes": ""
+    },
+    "huawei-technologies/imaster-nce-fabric": {
+      "quality": "adequate",
+      "reason": "22 docs, 2.3MB — covers NCE-Fabric but untested coverage breadth",
+      "totalDocs": 22,
+      "totalSizeKB": 2324,
+      "youtubePercent": 0,
+      "sectors": ["network-switching"],
+      "action": "ok",
+      "notes": "First full scoring run for Huawei in network-switching. Monitor results."
+    },
+    "red-hat/red-hat-enterprise-virtualization": {
+      "quality": "good",
+      "reason": "Strong technical doc (150K), good RHEV coverage",
+      "totalDocs": 5,
+      "totalSizeKB": 3200,
+      "youtubePercent": 0,
+      "sectors": ["computing-runtime"],
+      "action": "ok",
+      "notes": ""
+    },
+    "ibm/powervm": {
+      "quality": "excellent",
+      "reason": "Rich technical documentation (417K), comprehensive PowerVM coverage",
+      "totalDocs": 8,
+      "totalSizeKB": 8500,
+      "youtubePercent": 0,
+      "sectors": ["computing-runtime"],
+      "action": "ok",
+      "notes": "Best doc quality in computing-runtime. Benchmark for other products."
+    },
+    "oracle/oracle-sdn-controller": {
+      "quality": "good",
+      "reason": "Solid technical docs (326K), good SDN coverage",
+      "totalDocs": 6,
+      "totalSizeKB": 5200,
+      "youtubePercent": 0,
+      "sectors": ["computing-runtime"],
+      "action": "ok",
+      "notes": ""
+    }
+  },
+  "quarantine_summary": {
+    "quarantined_products": [
+      "microsoft/hyper-v",
+      "microsoft/hyper-v-network-virtualization",
+      "citrix/xenserver"
+    ],
+    "monitor_products": [
+      "hpe-hewlett-packard-enterprise/hpe-aruba-networking-virtual-switching-extension-vsx"
+    ],
+    "impact": "Scores for quarantined products may understate true infringement. Re-score after doc expansion for reliable comparison with IBM PowerVM, Oracle SDN, etc."
+  }
+}

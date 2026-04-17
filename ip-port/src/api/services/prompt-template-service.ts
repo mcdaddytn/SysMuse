@@ -12,6 +12,7 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import * as fs from 'fs';
 import * as path from 'path';
+import { extractClaimsText } from './patent-xml-parser-service.js';
 
 const prisma = new PrismaClient();
 
@@ -201,12 +202,14 @@ export function buildStructuredPrompt(
     lines.push('Analyze the following patent:\n');
     lines.push(`Patent ID: ${patent.patent_id}`);
     if (patent.patent_title) lines.push(`Title: ${patent.patent_title}`);
+    if (patent.assignee) lines.push(`Assignee: ${patent.assignee}`);
     if (patent.abstract) lines.push(`Abstract: ${patent.abstract}`);
     if (patent.patent_date) lines.push(`Grant Date: ${patent.patent_date}`);
     if (patent.cpc_codes) {
       const codes = Array.isArray(patent.cpc_codes) ? patent.cpc_codes.join(', ') : patent.cpc_codes;
       lines.push(`CPC Codes: ${codes}`);
     }
+    if (patent.claims_text) lines.push(`\nKey Claims:\n${patent.claims_text}`);
     lines.push('');
   }
 
@@ -306,7 +309,7 @@ export interface PatentData {
 /**
  * Load enriched patent data from the candidates file and LLM cache.
  */
-export function loadEnrichedPatents(patentIds: string[]): Map<string, PatentData> {
+export async function loadEnrichedPatents(patentIds: string[]): Promise<Map<string, PatentData>> {
   const result = new Map<string, PatentData>();
   const idSet = new Set(patentIds);
 
@@ -370,6 +373,50 @@ export function loadEnrichedPatents(patentIds: string[]): Map<string, PatentData
           });
         } catch { /* skip */ }
       }
+    }
+  }
+
+  // Database fallback: for patents still missing after file cache lookups,
+  // query the Prisma database for title, abstract, claims, assignee, grant date, CPC codes
+  const dbMissingIds = patentIds.filter(id => !result.has(id) || !result.get(id)!.patent_title);
+  if (dbMissingIds.length > 0) {
+    try {
+      const dbPatents = await prisma.patent.findMany({
+        where: { patentId: { in: dbMissingIds } },
+        select: {
+          patentId: true,
+          title: true,
+          abstract: true,
+          grantDate: true,
+          assignee: true,
+          cpcCodes: { select: { cpcCode: true } },
+          forwardCitations: true,
+        },
+      });
+      const xmlDir = process.env.USPTO_PATENT_GRANT_XML_DIR || '/Volumes/GLSSD2/data/uspto/export';
+      for (const dbp of dbPatents) {
+        const existing = result.get(dbp.patentId) || { patent_id: dbp.patentId };
+        // Extract claims from XML if available
+        let claimsText: string | null = null;
+        try {
+          claimsText = extractClaimsText(dbp.patentId, xmlDir, {
+            independentOnly: true, maxClaims: 5, maxTokens: 800,
+          });
+        } catch { /* skip claims extraction */ }
+        result.set(dbp.patentId, {
+          ...existing,
+          patent_id: dbp.patentId,
+          patent_title: dbp.title || existing.patent_title || '',
+          abstract: dbp.abstract || existing.abstract || '',
+          patent_date: dbp.grantDate ? String(dbp.grantDate).split('T')[0] : existing.patent_date || '',
+          assignee: dbp.assignee || existing.assignee || '',
+          cpc_codes: dbp.cpcCodes?.map(c => c.cpcCode) || existing.cpc_codes || [],
+          forward_citations: dbp.forwardCitations ?? existing.forward_citations ?? 0,
+          claims_text: claimsText || existing.claims_text || '',
+        });
+      }
+    } catch {
+      // Database lookup failed — continue without
     }
   }
 
@@ -830,7 +877,7 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
       },
     });
 
-    const patents = loadEnrichedPatents(patentIds);
+    const patents = await loadEnrichedPatents(patentIds);
 
     if (template.executionMode === 'PER_PATENT') {
       let completed = 0;
@@ -974,7 +1021,7 @@ export async function executeTemplate(templateId: string, focusAreaId: string): 
 /**
  * Preview a resolved prompt for a single patent without calling the LLM.
  */
-export function previewTemplate(
+export async function previewTemplate(
   template: {
     templateType: string;
     promptText: string | null;
@@ -988,7 +1035,7 @@ export function previewTemplate(
   patentIds: string[],
   previewPatentId?: string
 ): string {
-  const patents = loadEnrichedPatents(patentIds);
+  const patents = await loadEnrichedPatents(patentIds);
 
   if (executionMode === 'PER_PATENT') {
     const pid = previewPatentId || patentIds[0];

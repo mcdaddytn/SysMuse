@@ -1428,7 +1428,7 @@ router.post('/:id/prompt-templates/:tid/preview', async (req: Request, res: Resp
     });
     const patentIds = faPatents.map(p => p.patentId);
 
-    const resolvedPrompt = previewTemplate(
+    const resolvedPrompt = await previewTemplate(
       template,
       template.executionMode,
       template.contextFields,

@@ -118,6 +118,7 @@ enum PatentSource {
   BULK_DATA_IMPORT    // Imported from USPTO bulk grant XML files
   MANUAL              // Manually added
   FAMILY_EXPANSION    // Discovered via family exploration
+  FOCUS_AREA_IMPORT   // Auto-associated from focus area enrichment
 }
 
 model Company {

@@ -322,7 +322,7 @@ async function resolvePortfolio(options: ImportOptions) {
   return null;
 }
 
-function matchAffiliate(
+export function matchAffiliate(
   assigneeOrg: string,
   patternToAffiliate: Map<string, string>,
 ): string {

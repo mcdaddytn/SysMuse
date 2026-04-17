@@ -2038,7 +2038,7 @@ export interface SectorEnrichmentSummary {
 
 // Batch Job types
 export type CoverageType = 'llm' | 'prosecution' | 'prosecution-detail' | 'ipr' | 'family' | 'xml';
-export type TargetType = 'tier' | 'super-sector' | 'sector';
+export type TargetType = 'tier' | 'super-sector' | 'sector' | 'focus-area';
 export type SortStrategy = 'base_score' | 'v2_composite' | 'v3_snapshot' | 'newest_first' | 'forward_citations';
 
 export interface BatchJobSettings {

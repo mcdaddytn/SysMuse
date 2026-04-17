@@ -23,7 +23,7 @@ let lastBatchAutoProcess = 0;
 
 // Coverage types that can be run independently
 type CoverageType = 'llm' | 'prosecution' | 'prosecution-detail' | 'ipr' | 'family' | 'xml' | 'citing';
-type TargetType = 'tier' | 'super-sector' | 'sector';
+type TargetType = 'tier' | 'super-sector' | 'sector' | 'focus-area';
 type SortStrategy = 'base_score' | 'v2_composite' | 'v3_snapshot' | 'newest_first' | 'forward_citations';
 
 // API response shape (matches frontend BatchJob interface)
@@ -491,7 +491,16 @@ async function analyzeGaps(
       where.portfolios = { some: { portfolioId } };
     }
 
-    if (targetType === 'super-sector') {
+    if (targetType === 'focus-area') {
+      // Two-step query: get patent IDs from FocusAreaPatent, then filter Patent table
+      const faPatents = await prisma.focusAreaPatent.findMany({
+        where: { focusAreaId: targetValue },
+        select: { patentId: true },
+      });
+      const focusAreaPatentIds = faPatents.map(fp => fp.patentId);
+      if (focusAreaPatentIds.length === 0) return empty;
+      where.patentId = { in: focusAreaPatentIds };
+    } else if (targetType === 'super-sector') {
       where.superSector = targetValue;
     } else if (targetType === 'sector') {
       where.primarySector = targetValue;
@@ -1043,8 +1052,8 @@ router.post('/', async (req: Request, res: Response) => {
       settings,    // Optional: advanced settings (concurrency, retries, rate limits)
     } = req.body;
 
-    if (!targetType || !['tier', 'super-sector', 'sector'].includes(targetType)) {
-      return res.status(400).json({ error: 'Invalid targetType. Must be tier, super-sector, or sector' });
+    if (!targetType || !['tier', 'super-sector', 'sector', 'focus-area'].includes(targetType)) {
+      return res.status(400).json({ error: 'Invalid targetType. Must be tier, super-sector, sector, or focus-area' });
     }
 
     if (!targetValue) {
@@ -1114,6 +1123,16 @@ router.post('/', async (req: Request, res: Response) => {
       portfolioName = portfolio?.displayName || portfolio?.name || undefined;
     }
 
+    // Resolve focus area name for display
+    let focusAreaName: string | undefined;
+    if (targetType === 'focus-area') {
+      const focusArea = await prisma.focusArea.findUnique({
+        where: { id: targetValue },
+        select: { name: true },
+      });
+      focusAreaName = focusArea?.name || undefined;
+    }
+
     // Create a group ID to link related jobs
     const groupId = `group-${Date.now()}`;
     const createdJobs: BatchJobResponse[] = [];
@@ -1171,7 +1190,7 @@ router.post('/', async (req: Request, res: Response) => {
           data: {
             groupId,
             targetType,
-            targetValue: targetValue + chunkLabel,
+            targetValue: (focusAreaName || targetValue) + chunkLabel,
             coverageType,
             status: 'running',
             pid: child.pid ?? null,

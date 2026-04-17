@@ -5,7 +5,7 @@ import PortfolioSelector from '@/components/PortfolioSelector.vue';
 import { usePortfolioStore } from '@/stores/portfolio';
 import { useSuperSectors } from '@/composables/useSuperSectors';
 import {
-  patentApi, enrichmentApi, batchJobsApi, portfolioApi, scoringTemplatesApi, snapshotApi, quarantineApi,
+  patentApi, enrichmentApi, batchJobsApi, portfolioApi, scoringTemplatesApi, snapshotApi, quarantineApi, focusAreaApi,
   type EnrichmentSummary, type SectorEnrichmentSummary,
   type BatchJob, type BatchJobSettings, type BatchJobsResponse, type CoverageType, type TargetType, type SortStrategy, type GapsResponse,
   type BatchJobMetadata, type ScoreSnapshot,
@@ -272,7 +272,8 @@ const llmModelOptions = [
 const targetTypeOptions = [
   { value: 'tier', label: 'Tier (Top N patents)' },
   { value: 'super-sector', label: 'Super-Sector' },
-  { value: 'sector', label: 'Sector' }
+  { value: 'sector', label: 'Sector' },
+  { value: 'focus-area', label: 'Focus Area' },
 ];
 
 const coverageTypeOptions: Array<{ value: CoverageType; label: string; color: string }> = [
@@ -283,6 +284,17 @@ const coverageTypeOptions: Array<{ value: CoverageType; label: string; color: st
   { value: 'family', label: 'Patent Families', color: 'teal' },
   { value: 'xml', label: 'USPTO Bulk Data', color: 'positive' }
 ];
+
+// Focus area options for target selector
+const focusAreaOptions = ref<Array<{ label: string; value: string }>>([]);
+async function loadFocusAreaOptions() {
+  try {
+    const areas = await focusAreaApi.getFocusAreas({ status: 'ACTIVE' });
+    focusAreaOptions.value = areas.map(a => ({ label: a.name, value: a.id }));
+  } catch (err) {
+    console.error('Failed to load focus areas:', err);
+  }
+}
 
 // Load gaps when dialog opens or target changes
 async function loadGaps() {
@@ -297,6 +309,18 @@ async function loadGaps() {
     loadingGaps.value = false;
   }
 }
+
+watch(newJobTargetType, (val) => {
+  if (val === 'focus-area' && focusAreaOptions.value.length === 0) {
+    loadFocusAreaOptions();
+  }
+  // Reset target value when type changes
+  if (val === 'tier') {
+    newJobTargetValue.value = '6000';
+  } else {
+    newJobTargetValue.value = '';
+  }
+});
 
 watch([newJobTargetType, newJobTargetValue], () => {
   if (showNewJobDialog.value) {
@@ -578,6 +602,9 @@ function formatJobTarget(job: BatchJob): string {
     }
     // Legacy format: just show "Top N"
     return `Top ${parseInt(val).toLocaleString()}`;
+  }
+  if (job.targetType === 'focus-area') {
+    return `Focus Area: ${job.targetValue}`;
   }
   return job.targetValue;
 }
@@ -1902,6 +1929,19 @@ onUnmounted(() => {
             outlined
             type="number"
             hint="e.g., 6000 for top 6000 patents"
+          />
+
+          <q-select
+            v-else-if="newJobTargetType === 'focus-area'"
+            v-model="newJobTargetValue"
+            :options="focusAreaOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            label="Focus Area"
+            outlined
+            :loading="focusAreaOptions.length === 0"
           />
 
           <q-select

@@ -593,6 +593,45 @@ cp output/litigation-packages/litigation-package-*.csv output/vendor-exports/{se
 
 ---
 
+## Recent Changes (April 17, 2026 — Session 4)
+
+### 39. Focus Area Portfolio Auto-Association (Enhancement 1)
+**Files modified:**
+- `prisma/schema.prisma` — Added `FOCUS_AREA_IMPORT` to `PatentSource` enum
+- `src/api/services/uspto-import-service.ts` — Exported `matchAffiliate()` for reuse
+- `src/api/routes/focus-areas.routes.ts` — Auto-association after XML enrichment in POST `/:id/fetch-patents`
+
+**What it does:** After "Load Patent Data" (USPTO XML enrichment) completes for a focus area, the system automatically:
+1. Queries enriched patent assignees from the Patent table
+2. Loads all companies with portfolios and their active affiliate patterns
+3. Matches each patent's assignee(s) against affiliate patterns using `matchAffiliate()`
+4. Upserts `PortfolioPatent` with `source: FOCUS_AREA_IMPORT` and updates `Patent.affiliate`
+5. Returns `portfolioLinks: { linked: N, companies: [...] }` in the response
+
+Handles semicolon-separated assignees, is idempotent, and non-fatal on error.
+
+### 40. Focus Area as Batch Job Target Type (Enhancement 2)
+**Files modified:**
+- `src/api/routes/batch-jobs.routes.ts` — Added `'focus-area'` to `TargetType`, validation, `analyzeGaps()` (two-step query via `FocusAreaPatent`), and focus area name resolution for job display
+- `frontend/src/services/api.ts` — Added `'focus-area'` to `TargetType` union
+- `frontend/src/pages/JobQueuePage.vue` — Added Focus Area option to target type selector, focus area dropdown, and display formatting
+
+### Enhancement 3 (Planned): Prior Art Invalidity Risk Scoring
+**Spec document:** `docs/prior-art-risk-scoring-spec.md`
+
+**Short-term (quick version):** Implement prior art risk questions as Focus Area structured questions using the existing prompt template system. Deploy Q-U1 through Q-U8 (universal LLM questions) and applicable Q-S* super-sector questions per focus area. This avoids portfolio-wide rescoring and leverages existing focus area infrastructure.
+
+**Long-term goal:** Refactor into taxonomy-based questions with inheritance (super-sector → sector → sub-sector). Questions live at the highest stable level; sub-sector annotations inject tech-specific context. Migration path: proven focus-area questions promote to taxonomy level, triggering one-time portfolio backfill.
+
+**Implementation phases (from spec):**
+- Phase 1: ODP-only API metrics (Q-API-1, Q-API-2, Q-API-4) + universal LLM questions (Q-U1–Q-U8) + focus-area super-sector questions + CSV export + composite scoring v1
+- Phase 2: EPO OPS integration, Q-API-3/Q-API-5, Q-U6 priority chain assessment
+- Phase 3: Web search question infrastructure (Semantic Scholar, arXiv, GitHub, Wayback Machine), Q-U12–Q-U15, Q-S2/Q-S3
+- Phase 4: Taxonomy promotion, sub-sector annotation framework, portfolio-wide backfill
+- Phase 5: PTAB data integration, IPR outcome calibration
+
+---
+
 ## CLAUDE.md Rules (permanent)
 - **ALWAYS** include claims context in LLM scoring (`includeClaims: 'independent_only'`). Never use `includeClaims: 'none'` in production.
 - Base score formula v4 must stay in sync across 3 files (see §28 above).

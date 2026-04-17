@@ -17,6 +17,7 @@ import {
   getFieldsForObjectType,
 } from '../services/prompt-template-service.js';
 import { enrichPatentsFromXml } from '../services/patent-xml-parser-service.js';
+import { matchAffiliate } from '../services/uspto-import-service.js';
 import { generateLitigationPackageCsv } from '../services/litigation-export-service.js';
 
 const router = Router();
@@ -587,11 +588,107 @@ router.post('/:id/fetch-patents', async (req: Request, res: Response) => {
     console.log(`[FocusArea] Enriching ${allIds.length} patents from USPTO XML for focus area ${id}...`);
     const result = await enrichPatentsFromXml(allIds, exportDir, (msg) => console.log(`[FocusArea] ${msg}`));
 
+    // --- Auto-associate enriched patents to portfolios via assignee matching ---
+    const portfolioLinks: { linked: number; companies: string[] } = { linked: 0, companies: [] };
+    try {
+      // Get assignees for all enriched + skipped patents (skipped = already had XML data)
+      const processedIds = [...result.enriched, ...result.skipped];
+      if (processedIds.length > 0) {
+        const patents = await prisma.patent.findMany({
+          where: { patentId: { in: processedIds }, assignee: { not: '' } },
+          select: { patentId: true, assignee: true },
+        });
+
+        // Load all companies that have portfolios + their affiliate patterns
+        const companies = await prisma.company.findMany({
+          where: { portfolios: { some: {} } },
+          include: {
+            portfolios: { select: { id: true } },
+            affiliates: {
+              where: { isActive: true },
+              include: { patterns: true },
+            },
+          },
+        });
+
+        // Build per-company pattern maps
+        const companyMaps = companies.map(company => {
+          const patternMap = new Map<string, string>();
+          for (const affiliate of company.affiliates) {
+            for (const ap of affiliate.patterns) {
+              patternMap.set(ap.pattern.toLowerCase(), affiliate.name);
+            }
+          }
+          return {
+            companyName: company.displayName,
+            portfolioId: company.portfolios[0]?.id, // primary portfolio
+            patternMap,
+          };
+        }).filter(c => c.portfolioId && c.patternMap.size > 0);
+
+        if (companyMaps.length > 0) {
+          const linkedCompanies = new Set<string>();
+          let linkedCount = 0;
+
+          for (const patent of patents) {
+            // Split semicolon-separated assignees
+            const assignees = patent.assignee.split(';').map(a => a.trim()).filter(Boolean);
+
+            for (const assignee of assignees) {
+              let matched = false;
+              for (const company of companyMaps) {
+                const affiliateName = matchAffiliate(assignee, company.patternMap);
+                if (affiliateName !== assignee) {
+                  // Match found — upsert PortfolioPatent
+                  await prisma.portfolioPatent.upsert({
+                    where: {
+                      portfolioId_patentId: {
+                        portfolioId: company.portfolioId!,
+                        patentId: patent.patentId,
+                      },
+                    },
+                    update: {},
+                    create: {
+                      portfolioId: company.portfolioId!,
+                      patentId: patent.patentId,
+                      source: 'FOCUS_AREA_IMPORT',
+                    },
+                  });
+
+                  // Update Patent.affiliate field
+                  await prisma.patent.update({
+                    where: { patentId: patent.patentId },
+                    data: { affiliate: affiliateName },
+                  });
+
+                  linkedCompanies.add(company.companyName);
+                  linkedCount++;
+                  matched = true;
+                  break; // First company match wins for this patent
+                }
+              }
+              if (matched) break; // Stop checking other assignees for this patent
+            }
+          }
+
+          portfolioLinks.linked = linkedCount;
+          portfolioLinks.companies = [...linkedCompanies];
+
+          if (linkedCount > 0) {
+            console.log(`[FocusArea] Auto-linked ${linkedCount} patents to portfolios: ${portfolioLinks.companies.join(', ')}`);
+          }
+        }
+      }
+    } catch (assocErr) {
+      console.error('[FocusArea] Auto-association failed (non-fatal):', assocErr);
+    }
+
     res.json({
       total: allIds.length,
       enriched: result.enriched.length,
       failed: result.failed.length,
       skipped: result.skipped.length,
+      portfolioLinks,
     });
   } catch (error) {
     console.error('Error enriching patents for focus area:', error);

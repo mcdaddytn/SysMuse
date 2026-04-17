@@ -515,18 +515,62 @@ Compared V3 top-35 vs existing subsector top-35 for candidate sectors. Found mas
 
 **Key Insight:** V3 reranking effectiveness depends on alignment between patent themes and available product docs. Cloud-native/RIC patents match well against Ericsson/Mavenir docs. Abstract distributed systems patents don't match traditional router datasheets.
 
-### Scripts Created This Session
+### Scripts Created (Session 2)
 - `scripts/_build-wi-infringement-targets.ts` — wireless-infrastructure targets (11 products, 8 companies)
 - `scripts/_generate-wi-infringement-summary.ts` — wireless-infrastructure heatmap (8 companies)
 - `scripts/_build-np-infringement-targets.ts` — network-protocols targets (10 products, 5 companies)
 - `scripts/_generate-np-infringement-summary.ts` — network-protocols heatmap (5 companies)
 
-### Next Steps — Remaining V3 Sectors
-| # | Sector | V3 New | Est. Cost | Expected Quality |
-|---|--------|--------|-----------|------------------|
-| 1 | computing-os-security | 19/20 new | ~$9 | Good (CrowdStrike, Palo Alto, Cisco ISE) |
-| 2 | computing-data-protection | 21/26 new | ~$9 | Moderate (Varonis, IBM, Dell) |
-| 3 | computing-auth-boot | 24/24 new | ~$9 | Good (Okta, Cisco ISE, IBM Verify) |
+---
+
+## Recent Changes (April 17, 2026 — Session 3)
+
+### 38. V3 Batch: computing-os-security, computing-data-protection, computing-auth-boot
+
+Ran full V3 pipeline for all 3 remaining sectors via `scripts/_run-v3-batch-3sectors.sh`.
+
+| Sector | Patents | Pairs | Pass 2 | Very-High | Tier 1 | Tier 2 | Top Target |
+|--------|---------|-------|--------|-----------|--------|--------|------------|
+| computing-os-security | 62 | 620 | 99 (16%) | 1 | 1 | 4 | Check Point (0.89), SentinelOne (0.81) |
+| computing-data-protection | 66 | 660 | 46 (7%) | 2 | 0 | 4 | McAfee DLP (0.82), Dell (0.81) |
+| computing-auth-boot | 66 | 447 | 37 (8%) | 3 | 1 | 6 | Microsoft (0.92), Okta (0.82) |
+
+**Key results:**
+- **computing-auth-boot strongest**: US11726798 "Connected provisioning" scored 0.92 Microsoft, 0.82 Okta, 0.73 Ping Identity (3 companies >=0.50)
+- **computing-os-security**: US11645390 (NGAV virtualization) 0.89 Check Point, 0.81 SentinelOne. US12050684 hit 7/9 companies >=0.50 (best cross-company)
+- **computing-data-protection weakest**: No Tier 1; US8572758 (DLP) 0.82 McAfee, 0.75 Varonis best result
+- **Palo Alto XSOAR docs all junk HTML** — computing-auth-boot effectively 4 companies not 5
+
+### Scripts Created (Session 3)
+- `scripts/_build-cos-infringement-targets.ts` — computing-os-security (11 products, 9 companies)
+- `scripts/_generate-cos-infringement-summary.ts` — computing-os-security heatmap
+- `scripts/_build-cdp-infringement-targets.ts` — computing-data-protection (10 products, 7 companies)
+- `scripts/_generate-cdp-infringement-summary.ts` — computing-data-protection heatmap
+- `scripts/_build-cab-infringement-targets.ts` — computing-auth-boot (10 products, 5 companies)
+- `scripts/_generate-cab-infringement-summary.ts` — computing-auth-boot heatmap
+- `scripts/_run-v3-batch-3sectors.sh` — master batch runner
+
+### All 12 V3 Sector Packages Complete
+
+| Sector | Date | Very-High | Tier 1 | Quality |
+|--------|------|-----------|--------|---------|
+| computing-runtime | 04-16 | 22 | — | Strong |
+| network-switching | 04-16 | 33 | — | Strong |
+| network-auth-access | 04-16 | 9 | — | Moderate |
+| computing-systems | 04-16 | 27 | 17 | Strong |
+| network-management | 04-16 | 10 | 10 | Strong |
+| network-threat-protection | 04-16 | 9 | 9 | Moderate |
+| network-secure-compute | 04-16 | 19 | 8 | Strong |
+| wireless-infrastructure | 04-16 | 18 | 13 | Strong (V3) |
+| network-protocols | 04-16 | 4 | 2 | Weak (V3) |
+| computing-os-security | 04-17 | 1 | 1 | Moderate (V3) |
+| computing-data-protection | 04-17 | 2 | 0 | Weak (V3) |
+| computing-auth-boot | 04-17 | 3 | 1 | Moderate (V3) |
+
+### Pending Improvements
+1. **Abstract infringement scripts** — Replace per-sector `_build-*` and `_generate-*` scripts with data-driven config (company/product definitions) + single generic builder/generator
+2. **Nutanix V3 opportunities** — Check if newly scored V3 patents surface additional Nutanix-relevant candidates
+3. **Palo Alto XSOAR doc quality** — Docs flagged as 100% junk HTML; need rediscovery or manual cleanup
 
 ### Pipeline Reference
 ```bash

@@ -18,6 +18,7 @@ import {
 } from '../services/prompt-template-service.js';
 import { enrichPatentsFromXml } from '../services/patent-xml-parser-service.js';
 import { matchAffiliate } from '../services/uspto-import-service.js';
+import { hasPatentData, fetchAndCachePatents } from '../services/patent-fetch-service.js';
 import { generateLitigationPackageCsv } from '../services/litigation-export-service.js';
 
 const router = Router();

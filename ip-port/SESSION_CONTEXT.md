@@ -705,6 +705,62 @@ Current state: multiple per-company/sector scripts (`_build-*`, `_generate-*`, `
 4. Consolidate structured assessment questions into taxonomy-aware question bank
 5. Clean up naming conventions (consistent slugs, file names, directory structure)
 
+### 45. Cost Analysis: Mixed-Model Scoring for 50K–60K Patent Portfolios
+
+**Measured token usage** from 22,646 actual scoring runs: median **5,296 tokens** per patent (combined input+output), ~80/20 input/output split (~4,200 input + 1,060 output).
+
+**API Pricing (per million tokens):**
+
+| Model | Input | Output | Batch Input | Batch Output |
+|-------|-------|--------|-------------|--------------|
+| Haiku 4.5 | $1.00 | $5.00 | $0.50 | $2.50 |
+| Sonnet 4 | $3.00 | $15.00 | $1.50 | $7.50 |
+| Opus 4.6 | $5.00 | $25.00 | $2.50 | $12.50 |
+
+**Cost per patent (single scoring call):**
+- Haiku batch: $0.0047 | Sonnet batch: $0.0141 | Opus batch: $0.0235
+
+### Design Task: Mixed-Model Question Splitting
+**Status:** Design phase — to be built before next large portfolio run
+
+**Concept:** Split the ~25 structured questions per patent into complexity tiers and route to different models:
+
+**Tier A — Classification & Summaries (Haiku-capable, ~15-18 questions):**
+`patent_summary`, `prior_art_problem`, `technical_solution`, `tech_component_classification`, `wireless_generation`, `deployment_target`, `component_vs_system`, `deployment_context`, `security_layer`, `codec_generation`, `compression_component`, `encoder_decoder_scope`, `hw_sw_applicability`, `crypto_primitive`, plus all sector/sub-sector architecture/type classification questions.
+
+**Tier B — Guided Evaluation (Haiku adequate, ~5-8 questions):**
+`market_relevance`, `standards_relevance`, `implementation_clarity`, `licensing_revenue_potential`, `defense_posture`, `threat_sophistication`, `performance_efficiency`, plus sector-specific weighted evaluation questions.
+
+**Tier C — Deep Analysis (Sonnet/Opus required, ~7-8 questions):**
+`claim_breadth`, `design_around_difficulty`, `technical_novelty`, `evidence_of_use_detectability`, `product_mapping_probability`, `unique_value`, `standards_essentiality`, `standards_potential`.
+
+**Recommended strategy (Three-Tier Cascade, ~$350 for 55K patents):**
+
+| Phase | Patents | Questions | Model | Mode | Cost |
+|-------|---------|-----------|-------|------|------|
+| Full scoring | 55,000 | All ~25 | Haiku | Batch | $259 |
+| Tier C upgrade | 16,500 (top 30%) | 7-8 deep | Sonnet | Batch | $79 |
+| Tier C deep | 1,650 (top 3%) | 7-8 deep | Opus | Batch | $12 |
+| | | | | **Total** | **$350** |
+
+**Ranking for promotion:** 30% base_score (normalized, already in DB) + 70% Haiku V3 composite. This mitigates Haiku's weakness on deep analysis questions by anchoring with citation/time signals.
+
+**Code changes needed:**
+1. Split question set into Tier A+B and Tier C groups in scoring template config
+2. Add `questionSubset` parameter to scoring call
+3. Merge scores from multiple model runs in DB
+4. Natural extension of existing `questionFingerprint` staleness tracking
+
+**Comparison of all strategies at 55K patents:**
+
+| Strategy | Cost | Notes |
+|----------|------|-------|
+| All-Sonnet batch | $776 | Simple, overkill for bottom 50% |
+| Haiku-all → Sonnet top 15% (full re-score) | $375 | Simple, re-scores duplicate work |
+| Haiku-all + Sonnet Tier C top 20% (selective upgrade) | $312 | Cheapest, but ranking depends on Haiku Tier C |
+| **Three-tier cascade (recommended)** | **$350** | Best quality/cost, Opus on top 3% |
+| Split calls (all patents, 2 models) | $622 | Every patent gets Sonnet deep, 68% token overhead |
+
 ---
 
 ## CLAUDE.md Rules (permanent)

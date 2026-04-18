@@ -360,7 +360,7 @@ function main() {
           prod.companyName,
           prod.productName,
           doc.documentName,
-          doc.pass1Score.toFixed(2),
+          doc.pass1Score != null ? doc.pass1Score.toFixed(2) : '',
           doc.finalScore !== null ? doc.finalScore.toFixed(2) : '',
           doc.score.toFixed(2),
           scoreTier(doc.score),

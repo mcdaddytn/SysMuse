@@ -106,3 +106,50 @@ class OrientationMode(enum.Enum):
     """Whether the pipe cutout extends along X or Y axis."""
     Tall = 'Tall'      # Extension along Y axis (default)
     Wide = 'Wide'      # Extension along X axis
+
+
+class FastenerStyle(enum.Enum):
+    """How a bolt is retained on the non-bolt side of a printed part.
+    Drives the geometry of the nut well / threaded hole / cap recess.
+
+    See docs/features/FEATURE_slider_camera_bracket.md for the rationale
+    behind each variant.
+    """
+    ThreadedIntoPlastic = 'ThreadedIntoPlastic'
+    """Tap directly into printed material. OK for low-cycle use, no extra hardware."""
+
+    CapturedNut = 'CapturedNut'
+    """Hex pocket sized for nut + minimal clearance. Relies on assembly orientation
+    to keep nut in place. This is the existing default for all pipe clamps."""
+
+    CapturedNutWithCap = 'CapturedNutWithCap'
+    """Hex pocket plus oversized hex cap recess. Cap is printed separately and glued
+    in after nut placement. Permanent retention with metal-on-metal threads.
+    Preferred for adjustment fasteners that get repeatedly cycled."""
+
+    ThreadedInsertM3 = 'ThreadedInsertM3'
+    ThreadedInsertM4 = 'ThreadedInsertM4'
+    ThreadedInsertM5 = 'ThreadedInsertM5'
+    ThreadedInsertM6 = 'ThreadedInsertM6'
+    """Heat-set or press-fit brass threaded insert. Best for high-cycle threaded
+    engagement, especially in lock-screw positions where the screw is removed
+    and reinstalled often."""
+
+
+class CageMountPattern(enum.Enum):
+    """Mount-hole pattern on a camera-cage interface plate.
+
+    Each value identifies a specific cage type's mounting hole layout.
+    See docs/features/FEATURE_slider_camera_bracket.md for SmallRig details.
+    """
+    SmallRig_Quarter20_Pair = 'SmallRig_Quarter20_Pair'
+    """Pair of 1/4-20 UNC clearance holes. Default for v1."""
+
+    SmallRig_Quarter20_With_ARRI_Pins = 'SmallRig_Quarter20_With_ARRI_Pins'
+    """Pair of 1/4-20 holes plus 4mm ARRI pin holes for anti-rotation."""
+
+    SmallRig_ThreeEighths = 'SmallRig_ThreeEighths'
+    """3/8-16 UNC threaded hole pattern (tripod-style)."""
+
+    Generic_Quarter20_Single = 'Generic_Quarter20_Single'
+    """Single 1/4-20 hole (single-bolt cage adapter)."""

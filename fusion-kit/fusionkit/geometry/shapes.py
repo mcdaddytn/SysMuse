@@ -212,3 +212,94 @@ class HexagonShape:
             points[0], points[1], True, 6
         )
         return hex_lines
+
+
+@dataclasses.dataclass
+class SlotShape:
+    """
+    A rounded-end slot: rectangle with two semicircular ends.
+
+    Centered on `center` by default. The long axis is X (overall end-to-end
+    `length`); the short axis is Y (overall `width`, equal to the diameter
+    of the end semicircles). Optional rotation in the sketch plane via
+    `long_axis_angle_rad`.
+
+    Used for travel slots in adjustable mounts (e.g., the slider rail's
+    carriage travel slot).
+    """
+    center: adsk.core.Point3D
+    length: float                     # total end-to-end length (API units = cm)
+    width: float                      # cross-axis width = end semicircle diameter
+    long_axis_angle_rad: float = 0.0  # rotation around `center` in the sketch plane
+
+    def draw(self, sketch: adsk.fusion.Sketch) -> typing.List[typing.Any]:
+        """
+        Draw the slot. Returns [line_top, line_bottom, arc_right, arc_left].
+
+        Geometry: two parallel lines of length (length - width) connected by
+        two semicircular arcs of radius (width / 2).
+
+        Raises ValueError if length <= width (would produce a degenerate slot).
+        """
+        if self.length <= self.width:
+            raise ValueError(
+                f"SlotShape: length ({self.length}) must be > width ({self.width}); "
+                f"a slot must be longer than its end diameter"
+            )
+
+        radius: float = self.width / 2.0
+        half_straight: float = (self.length - self.width) / 2.0
+
+        cos_a: float = math.cos(self.long_axis_angle_rad)
+        sin_a: float = math.sin(self.long_axis_angle_rad)
+
+        def transform(local_x: float, local_y: float) -> adsk.core.Point3D:
+            rx: float = local_x * cos_a - local_y * sin_a
+            ry: float = local_x * sin_a + local_y * cos_a
+            return adsk.core.Point3D.create(
+                self.center.x + rx, self.center.y + ry, self.center.z
+            )
+
+        # Endpoint coordinates (centered on origin, then rotated and translated)
+        right_top: adsk.core.Point3D = transform(half_straight, radius)
+        right_bottom: adsk.core.Point3D = transform(half_straight, -radius)
+        left_top: adsk.core.Point3D = transform(-half_straight, radius)
+        left_bottom: adsk.core.Point3D = transform(-half_straight, -radius)
+
+        # Arc midpoints (the rightmost and leftmost extreme points)
+        right_arc_mid: adsk.core.Point3D = transform(half_straight + radius, 0.0)
+        left_arc_mid: adsk.core.Point3D = transform(-half_straight - radius, 0.0)
+
+        lines: adsk.fusion.SketchLines = sketch.sketchCurves.sketchLines
+        arcs: adsk.fusion.SketchArcs = sketch.sketchCurves.sketchArcs
+
+        # Top line connects left-top to right-top
+        line_top: adsk.fusion.SketchLine = lines.addByTwoPoints(left_top, right_top)
+        # Bottom line connects right-bottom to left-bottom
+        line_bottom: adsk.fusion.SketchLine = lines.addByTwoPoints(right_bottom, left_bottom)
+
+        # Right arc: right_top → right_arc_mid → right_bottom
+        arc_right: adsk.fusion.SketchArc = arcs.addByThreePoints(
+            right_top, right_arc_mid, right_bottom
+        )
+        # Left arc: left_bottom → left_arc_mid → left_top
+        arc_left: adsk.fusion.SketchArc = arcs.addByThreePoints(
+            left_bottom, left_arc_mid, left_top
+        )
+
+        return [line_top, line_bottom, arc_right, arc_left]
+
+    def bounding_box_dimensions(self) -> typing.Tuple[float, float]:
+        """
+        Return (bbox_width, bbox_height) — the axis-aligned bounding box of the
+        slot, accounting for rotation. Useful for ProfileSelector.by_bounding_box
+        when picking the slot's profile to extrude-cut.
+
+        For axis-aligned slots (long_axis_angle_rad == 0), returns (length, width).
+        For arbitrary rotation, returns the rotated bounding box.
+        """
+        cos_a: float = abs(math.cos(self.long_axis_angle_rad))
+        sin_a: float = abs(math.sin(self.long_axis_angle_rad))
+        bbox_w: float = self.length * cos_a + self.width * sin_a
+        bbox_h: float = self.length * sin_a + self.width * cos_a
+        return (bbox_w, bbox_h)

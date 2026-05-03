@@ -10,18 +10,36 @@ import dataclasses
 import math
 import typing
 
+from fusionkit.core.enums import FastenerStyle
+
 
 @dataclasses.dataclass
 class BoltHoleSpec:
     """
     Complete specification for one bolt hole with optional countersink and nut well.
     All dimensions in API units (cm).
+
+    Backward compatibility: the first five fields preserve the original API.
+    New fields (fastener_style, cap_*, insert_*) have defaults that match
+    the prior behavior — existing call sites continue to work unchanged.
     """
     screw_diameter: float         # Clearance hole diameter (e.g., 0.42 for M4)
     screw_head_diameter: float    # Countersink diameter (e.g., 0.77 for M4 socket cap)
     screw_head_depth: float       # Countersink depth (e.g., 0.5)
     nut_width: float              # Hex nut across-flats (e.g., 0.9 for M4)
     nut_thickness: float          # Hex nut height / well depth (e.g., 0.4)
+
+    # ── Extended fields for FastenerStyle dispatch ───────────────────────
+    # Default = CapturedNut, which preserves pre-extension behavior.
+    fastener_style: FastenerStyle = FastenerStyle.CapturedNut
+
+    # CapturedNutWithCap parameters (ignored for other styles)
+    cap_clearance: float = 0.0     # extra width-across-flats on the cap (cm)
+    cap_depth: float = 0.0         # depth of the cap recess from outer face (cm)
+
+    # ThreadedInsert parameters (ignored for other styles)
+    insert_outer_diameter: float = 0.0  # OD of the brass insert pocket (cm)
+    insert_depth: float = 0.0           # how deep the insert pocket extends (cm)
 
 
 class HolePatternDriller:
@@ -99,13 +117,13 @@ class HolePatternDriller:
             hole_ext_input.setDistanceExtent(False, adsk.core.ValueInput.createByReal(rect_edge_y))
             self.root_comp.features.extrudeFeatures.add(hole_ext_input)
 
-            # Hex nut well on back face
-            nut_sketch: adsk.fusion.Sketch = sketches.add(back_face)
-            self._draw_hex_nut_well(
-                nut_sketch,
-                adsk.core.Point3D.create(x * -1, z, 0),  # Coordinate transform for back face
-                spec.nut_width,
-                spec.nut_thickness,
+            # Nut / cap / insert retention on back face — dispatch on fastener_style.
+            # Default (CapturedNut) preserves the original geometry exactly.
+            back_face_center: adsk.core.Point3D = adsk.core.Point3D.create(x * -1, z, 0)
+            self._dispatch_retention(
+                back_face,
+                back_face_center,
+                spec,
                 negative_direction=True,
             )
 
@@ -256,6 +274,149 @@ class HolePatternDriller:
             hole_ext.setDistanceExtent(False, adsk.core.ValueInput.createByReal(-object_depth))
             self.root_comp.features.extrudeFeatures.add(hole_ext)
 
+    # ── Internal: hex point computation (shared by all retention styles) ──
+
+    @staticmethod
+    def _hex_points(
+        center: adsk.core.Point3D,
+        across_flats: float,
+    ) -> typing.List[adsk.core.Point3D]:
+        """Return six points around a regular hexagon centered at `center`.
+        `across_flats` is the nut width (distance across flats); the radius
+        passed to addEdgePolygon is half of that. The polygon is drawn in
+        the sketch's local 2D coordinates; the caller must ensure `center`
+        is in those coordinates."""
+        hex_radius: float = across_flats / 2.0
+        hex_angle: float = 360.0 / 6.0
+        points: typing.List[adsk.core.Point3D] = []
+        for i in range(6):
+            angle_rad: float = math.radians(i * hex_angle)
+            px: float = center.x + hex_radius * math.cos(angle_rad)
+            py: float = center.y + hex_radius * math.sin(angle_rad)
+            point: adsk.core.Point3D = adsk.core.Point3D.create(px, py, center.z)
+            points.append(point)
+        return points
+
+    # ── Retention dispatch ───────────────────────────────────────────────
+
+    def _dispatch_retention(
+        self,
+        face: adsk.fusion.BRepFace,
+        center: adsk.core.Point3D,
+        spec: BoltHoleSpec,
+        negative_direction: bool,
+    ) -> None:
+        """
+        Carve the bolt-side retention feature (nut well / cap recess /
+        insert pocket / nothing) on the given face according to
+        spec.fastener_style. Each branch creates its own sketch on the face.
+        """
+        sketches: adsk.fusion.Sketches = self.root_comp.sketches
+
+        if spec.fastener_style == FastenerStyle.CapturedNut:
+            sketch: adsk.fusion.Sketch = sketches.add(face)
+            self._draw_hex_nut_well(
+                sketch, center, spec.nut_width, spec.nut_thickness,
+                negative_direction=negative_direction,
+            )
+        elif spec.fastener_style == FastenerStyle.CapturedNutWithCap:
+            self.carve_captured_nut_with_cap(
+                face, center, spec, negative_direction=negative_direction,
+            )
+        elif spec.fastener_style == FastenerStyle.ThreadedIntoPlastic:
+            # No retention feature — bolt threads tap directly into plastic.
+            pass
+        elif spec.fastener_style.value.startswith('ThreadedInsert'):
+            self.drill_threaded_insert(
+                face, center, spec, negative_direction=negative_direction,
+            )
+
+    # ── Public retention helpers (callable directly by components) ───────
+
+    def carve_captured_nut_with_cap(
+        self,
+        face: adsk.fusion.BRepFace,
+        center: adsk.core.Point3D,
+        spec: BoltHoleSpec,
+        negative_direction: bool = False,
+    ) -> None:
+        """
+        Two-stage hex pocket: an inner nut well at depth (cap_depth + nut_thickness)
+        from the outer face, plus a slightly larger hex cap recess at depth cap_depth.
+        The captured nut sits in the inner well; the printed hex cap is glued into
+        the outer recess after assembly to permanently retain the nut.
+
+        Geometry from the outer face inward:
+            outer face → cap recess (depth = spec.cap_depth,
+                                     width across flats = spec.nut_width + 2 * spec.cap_clearance)
+                      → inner nut well (depth = spec.nut_thickness,
+                                        width across flats = spec.nut_width)
+
+        Implementation: two separate sketches and two extrude-cuts. Cap recess is
+        cut to spec.cap_depth, inner well is cut to (cap_depth + nut_thickness),
+        producing a stepped hex pocket. The cap recess overlap with the inner well
+        in the cap_depth region is harmless (extrude-cut is idempotent there).
+        """
+        sketches: adsk.fusion.Sketches = self.root_comp.sketches
+        extrudes: adsk.fusion.ExtrudeFeatures = self.root_comp.features.extrudeFeatures
+
+        # ── Inner hex well: full depth (cap_depth + nut_thickness) ───────
+        inner_sketch: adsk.fusion.Sketch = sketches.add(face)
+        inner_points: typing.List[adsk.core.Point3D] = self._hex_points(center, spec.nut_width)
+        inner_sketch.sketchCurves.sketchLines.addEdgePolygon(
+            inner_points[0], inner_points[1], True, 6
+        )
+        inner_profile: adsk.fusion.Profile = inner_sketch.profiles.item(0)
+        inner_total_depth: float = spec.cap_depth + spec.nut_thickness
+        inner_signed: float = -inner_total_depth if negative_direction else inner_total_depth
+        inner_input: adsk.fusion.ExtrudeFeatureInput = extrudes.createInput(
+            inner_profile, adsk.fusion.FeatureOperations.CutFeatureOperation
+        )
+        inner_input.setDistanceExtent(False, adsk.core.ValueInput.createByReal(inner_signed))
+        extrudes.add(inner_input)
+
+        # ── Outer cap recess: depth = cap_depth, width = nut_width + 2*cap_clearance ──
+        cap_sketch: adsk.fusion.Sketch = sketches.add(face)
+        cap_across_flats: float = spec.nut_width + 2.0 * spec.cap_clearance
+        cap_points: typing.List[adsk.core.Point3D] = self._hex_points(center, cap_across_flats)
+        cap_sketch.sketchCurves.sketchLines.addEdgePolygon(
+            cap_points[0], cap_points[1], True, 6
+        )
+        cap_profile: adsk.fusion.Profile = cap_sketch.profiles.item(0)
+        cap_signed: float = -spec.cap_depth if negative_direction else spec.cap_depth
+        cap_input: adsk.fusion.ExtrudeFeatureInput = extrudes.createInput(
+            cap_profile, adsk.fusion.FeatureOperations.CutFeatureOperation
+        )
+        cap_input.setDistanceExtent(False, adsk.core.ValueInput.createByReal(cap_signed))
+        extrudes.add(cap_input)
+
+    def drill_threaded_insert(
+        self,
+        face: adsk.fusion.BRepFace,
+        center: adsk.core.Point3D,
+        spec: BoltHoleSpec,
+        negative_direction: bool = False,
+    ) -> None:
+        """
+        Drill a circular pocket sized for a threaded brass insert (heat-set or
+        press-fit). No nut well — the insert provides the threads. The pocket
+        OD is spec.insert_outer_diameter and depth is spec.insert_depth.
+        """
+        sketches: adsk.fusion.Sketches = self.root_comp.sketches
+        insert_sketch: adsk.fusion.Sketch = sketches.add(face)
+        insert_sketch.sketchCurves.sketchCircles.addByCenterRadius(
+            center, spec.insert_outer_diameter / 2.0
+        )
+        insert_profile: adsk.fusion.Profile = insert_sketch.profiles.item(0)
+        depth_signed: float = -spec.insert_depth if negative_direction else spec.insert_depth
+        insert_input: adsk.fusion.ExtrudeFeatureInput = self.root_comp.features.extrudeFeatures.createInput(
+            insert_profile, adsk.fusion.FeatureOperations.CutFeatureOperation
+        )
+        insert_input.setDistanceExtent(False, adsk.core.ValueInput.createByReal(depth_signed))
+        self.root_comp.features.extrudeFeatures.add(insert_input)
+
+    # ── Internal: original CapturedNut implementation (preserved) ────────
+
     def _draw_hex_nut_well(
         self,
         sketch: adsk.fusion.Sketch,
@@ -265,7 +426,8 @@ class HolePatternDriller:
         negative_direction: bool = False,
     ) -> None:
         """
-        Draw and cut a hexagonal nut well.
+        Draw and cut a hexagonal nut well. The default CapturedNut behavior;
+        used for backward compatibility with existing pipe clamp configs.
 
         Args:
             sketch: Sketch on the face where the nut well goes.
@@ -274,16 +436,8 @@ class HolePatternDriller:
             nut_depth: How deep to cut.
             negative_direction: Whether to cut in negative normal direction.
         """
-        hex_radius: float = nut_width / 2.0
-        hex_angle: float = 360.0 / 6.0
-        points: typing.List[adsk.core.Point3D] = []
-        for i in range(6):
-            px: float = center.x + hex_radius * math.cos(math.radians(i * hex_angle))
-            py: float = center.y + hex_radius * math.sin(math.radians(i * hex_angle))
-            point: adsk.core.Point3D = adsk.core.Point3D.create(px, py, center.z)
-            points.append(point)
-
-        hex_lines: adsk.fusion.SketchLineList = sketch.sketchCurves.sketchLines.addEdgePolygon(
+        points: typing.List[adsk.core.Point3D] = self._hex_points(center, nut_width)
+        sketch.sketchCurves.sketchLines.addEdgePolygon(
             points[0], points[1], True, 6
         )
         profile: adsk.fusion.Profile = sketch.profiles.item(0)

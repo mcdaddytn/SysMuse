@@ -78,6 +78,22 @@ Calculate: minimum bolt length, well depths, countersink dimensions
 - [ ] `components/mounting_plate.py` — MountingPlate: configurable hole patterns on flat plate
 - [ ] `components/l_bracket.py` — LBracket: 90° bracket with holes on both faces
 
+### 3.3.1 Slider Camera Bracket Family
+- [x] `core/enums.py` — FastenerStyle, CageMountPattern enums
+- [x] `geometry/shapes.py` — SlotShape primitive
+- [x] `features/hole_patterns.py` — captured-nut-with-cap and threaded-insert support
+- [x] `features/extrude.py` — ExtrudeOp.join helper
+- [x] `components/slider_rail.py` — SliderRail (clamp body + integral rail plate + slot)
+- [x] `components/slider_carriage.py` — SliderCarriage (cage-mount plate that rides the slot)
+- [x] `configs/components/slider_rail/slider_rail_pvc1in_v1.json` — first config
+- [x] `configs/components/slider_carriage/smallrig_carriage_v1.json` — first config
+- [x] `configs/kits/camera_slider_pvc_mount.json` — kit definition
+- [ ] Validate SliderRail builds correctly in Fusion (8-line T outline + bore + slot cut)
+- [ ] Validate SliderCarriage builds correctly (plate + cage holes + slot bolt + lock screw)
+- [ ] Print and physically test slot bolt fit, cage mount alignment
+
+See `docs/features/FEATURE_slider_camera_bracket.md`.
+
 ### 3.4 Pipe dimension catalog
 - [ ] `catalog/pipe_dimensions.py` — Standard PVC OD/ID table (nominal → actual)
 - [ ] `catalog/pvc_catalog.py` — Formufit fitting dimensions

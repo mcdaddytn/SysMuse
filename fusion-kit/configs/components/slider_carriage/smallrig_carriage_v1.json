@@ -1,0 +1,27 @@
+{
+    "PlateLength": 70,
+    "PlateWidth": 60,
+    "PlateThickness": 8,
+
+    "CageMountPattern": "SmallRig_Quarter20_Pair",
+    "CageBoltDiameter": 6.4,
+    "CageBoltSpacing": 38,
+    "CageBoltCounterboreDiameter": 11,
+    "CageBoltCounterboreDepth": 4,
+
+    "SlotBoltDiameter": 6.0,
+    "SlotBoltHeadDiameter": 11,
+    "SlotBoltHeadDepth": 4,
+    "CapturedSlotNut": "False",
+    "NutWidth": 10,
+    "NutThickness": 5,
+    "CapClearance": 0.2,
+    "CapDepth": 2,
+
+    "LockScrewEnabled": "False",
+    "LockScrewDiameter": 4,
+    "LockScrewInsertDiameter": 6,
+    "LockScrewInsertDepth": 8,
+
+    "SketchOnly": "False"
+}

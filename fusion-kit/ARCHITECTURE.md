@@ -233,6 +233,37 @@ class DoubleSidedLunaWrench(ComponentBase):
     ...
 ```
 
+### SliderRail
+
+```python
+class SliderRail(ComponentBase):
+    """
+    Pipe clamp with integral rail plate and travel slot. Cross-section
+    is a T outline (clamp body wider, rail plate narrower) so captured-nut
+    wells on the clamp body's back-face shoulders remain accessible.
+    Body splits at xz-plane into ScrewSide (clamp lower half) and
+    NutSide_WithRail (clamp upper half + entire rail plate).
+
+    v1 fixes FastenerStyle to CapturedNutWithCap for clamp bolts;
+    requires RailPlateWidth < ClampBodyWidth.
+    """
+```
+
+### SliderCarriage
+
+```python
+class SliderCarriage(ComponentBase):
+    """
+    Flat plate that mounts under a SmallRig (or similar) camera cage and
+    rides the slot of a SliderRail. Top face has cage-mount holes per
+    CageMountPattern (v1: SmallRig_Quarter20_Pair). Center has slot bolt
+    through-hole with optional captured-nut-with-cap on top face. Optional
+    lock-screw threaded insert on +X side face.
+    """
+```
+
+See `docs/features/FEATURE_slider_camera_bracket.md` for the full design.
+
 ---
 
 ## Assembly Layer

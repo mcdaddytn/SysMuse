@@ -1,0 +1,43 @@
+{
+    "_description": "Sliding camera bracket on 1in PVC: SliderRail + SliderCarriage with two-axis adjustment for overhead camera mounting (e.g., piano keyboard).",
+    "_units": "mm",
+    "kit_name": "camera_slider_pvc_mount_v1",
+
+    "components": [
+        {
+            "id": "slider_rail",
+            "type": "SliderRail",
+            "config": "configs/components/slider_rail/slider_rail_pvc1in_v1.json",
+            "description": "1in PVC clamp with integral rail plate and 60mm travel slot"
+        },
+        {
+            "id": "slider_carriage",
+            "type": "SliderCarriage",
+            "config": "configs/components/slider_carriage/smallrig_carriage_v1.json",
+            "description": "Carriage that mounts under SmallRig cage and rides the rail's slot"
+        }
+    ],
+
+    "assembly_steps": [
+        {
+            "action": "position",
+            "component": "slider_carriage",
+            "on_surface": "slider_rail.rail_plate_top",
+            "offset_mm": [0, 0, 0]
+        },
+        {
+            "action": "fasten",
+            "fastener": "configs/fasteners/m6_socket_cap.json",
+            "from": "slider_carriage.slot_bolt_hole",
+            "to": "slider_rail.travel_slot"
+        }
+    ],
+
+    "export": {
+        "stl_per_body": true,
+        "step_assembly": true,
+        "bom": true
+    },
+
+    "notes": "Phase 4 feature — assembly_steps are not yet executed by KitBuilder. v1 builds components individually; user assembles physically per docs/features/FEATURE_slider_camera_bracket.md."
+}

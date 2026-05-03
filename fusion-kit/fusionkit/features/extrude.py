@@ -81,3 +81,29 @@ class ExtrudeOp:
         ext_input.setDistanceExtent(False, dist_value)
         extrude: adsk.fusion.ExtrudeFeature = extrudes.add(ext_input)
         return extrude
+
+    @staticmethod
+    def join(root_comp: adsk.fusion.Component,
+             profile: adsk.fusion.Profile,
+             distance: float) -> adsk.fusion.ExtrudeFeature:
+        """
+        Extrude a profile and join it to existing bodies (boolean union).
+        Useful for adding monolithic features (rail plates, mounting bosses)
+        to an already-extruded body.
+
+        Args:
+            root_comp: The root component.
+            profile: The sketch profile to extrude and join.
+            distance: Extrusion distance (positive or negative for direction).
+
+        Returns:
+            The ExtrudeFeature.
+        """
+        extrudes: adsk.fusion.ExtrudeFeatures = root_comp.features.extrudeFeatures
+        ext_input: adsk.fusion.ExtrudeFeatureInput = extrudes.createInput(
+            profile, adsk.fusion.FeatureOperations.JoinFeatureOperation
+        )
+        dist_value: adsk.core.ValueInput = adsk.core.ValueInput.createByReal(distance)
+        ext_input.setDistanceExtent(False, dist_value)
+        extrude: adsk.fusion.ExtrudeFeature = extrudes.add(ext_input)
+        return extrude

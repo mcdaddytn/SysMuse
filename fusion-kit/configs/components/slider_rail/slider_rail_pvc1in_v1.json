@@ -1,0 +1,22 @@
+{
+    "PvcOuterDiameter": 33.4,
+    "ClampBodyLength": 100,
+    "ClampBodyWidth": 60,
+    "ClampBodyHeight": 50,
+    "RailPlateWidth": 36,
+    "RailPlateThickness": 8,
+
+    "SlotLength": 60,
+    "SlotWidth": 6.5,
+
+    "ScrewDiameter": 5.2,
+    "ScrewHeadDiameter": 9.5,
+    "ScrewHeadDepth": 5.5,
+    "NutWidth": 8,
+    "NutThickness": 4,
+    "CapClearance": 0.2,
+    "CapDepth": 2,
+
+    "NumClampBolts": 2,
+    "SketchOnly": "False"
+}

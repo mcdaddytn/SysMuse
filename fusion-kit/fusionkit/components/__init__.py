@@ -10,6 +10,8 @@ from fusionkit.components.pipe_clamp import PipeClamp
 from fusionkit.components.luna_wrench import LunaWrench, DoubleSidedLunaWrench
 from fusionkit.components.hi_hat_cylinder import HiHatCylinder
 from fusionkit.components.mounting_plate import MountingPlate
+from fusionkit.components.slider_rail import SliderRail
+from fusionkit.components.slider_carriage import SliderCarriage
 
 
 # Registry of all available component types.
@@ -19,6 +21,8 @@ COMPONENT_REGISTRY: typing.Dict[str, typing.Type[ComponentBase]] = {
     'DoubleSidedLunaWrench': DoubleSidedLunaWrench,
     'HiHatCylinder': HiHatCylinder,
     'MountingPlate': MountingPlate,
+    'SliderRail': SliderRail,
+    'SliderCarriage': SliderCarriage,
 }
 
 

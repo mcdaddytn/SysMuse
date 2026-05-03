@@ -156,6 +156,21 @@ Calculate: minimum bolt length, well depths, countersink dimensions
 
 ---
 
+## Cross-Cutting Tooling
+
+Reverse-engineering and developer-experience tooling that supports work across all phases.
+
+### Timeline Extractor (Reverse Engineering)
+- [x] `fusionkit/export/timeline_extractor.py` — `TimelineExtractor` class
+- [x] `scripts/extract_timeline.py` — Fusion 360 entry-point script
+- [x] `tests/test_timeline_extractor.py` — outside-Fusion unit tests
+- [ ] Validate against existing `pipeclamp15` build (run inside Fusion)
+- [ ] Validate iterative loop end-to-end: build → Connector adds chamfer → extract → diff
+
+See `docs/features/FEATURE_timeline_extractor.md`.
+
+---
+
 ## Testing Strategy
 
 ### Unit tests (outside Fusion 360)

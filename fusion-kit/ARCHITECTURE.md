@@ -284,6 +284,34 @@ class KitBuilder:
 
 ---
 
+## Export Layer
+
+### STLExporter
+
+Per-body STL export with Fusion's show/hide visibility technique. Used by both `ComponentBase.export_stl()` and `KitBuilder.export_all()`.
+
+### StateDumper
+
+JSON snapshot of all sketches (with sketch points) and bodies (with face vertices). Geometric snapshot for regression testing — useful for verifying that a refactor produces identical geometry.
+
+### TimelineExtractor
+
+Captures parametric intent — user parameters, ordered timeline of feature operations, sketch dimensions linked to their driving parameters, and bodies with bounding boxes. Peer to `StateDumper` but for reverse engineering rather than regression testing.
+
+```python
+class TimelineExtractor:
+    def __init__(self, ctx: AppContext): ...
+    def extract(self) -> typing.Dict[str, typing.Any]: ...
+    def dump(self, output_path: str) -> None: ...
+    def dump_to_string(self) -> str: ...
+```
+
+Output JSON includes `user_parameters`, `auto_parameters`, `timeline` (per-feature dispatched: Sketch, Extrude, Hole, Fillet, Chamfer, Revolve, Combine, MoveFeature, MirrorFeature, RectangularPattern, CircularPattern, ConstructionPlane, ConstructionAxis, SplitBody), `sketches` with `sketchDimensions` linked to parameters, `bodies` with bounding boxes, and a best-effort `fusionkit_candidate_spec` flat dict ready to hand-merge into a FusionKit component spec.
+
+Used as the back half of the iterative forward/reverse engineering loop with the Fusion 360 Connector for Claude. See `docs/features/FEATURE_timeline_extractor.md`.
+
+---
+
 ## JSON Config Schema
 
 ### Component Config (e.g., pipe_clamp)
